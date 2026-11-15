@@ -265,6 +265,304 @@ export function createMaterialLibrary(renderer) {
     polygonOffsetFactor: -2
   });
 
+  // Procedural story-specific high-DPI textures (non-invented, crisp details)
+  // 1. Memory 02: Intentional non-face assignment photo placeholder card
+  const phCanvas = document.createElement('canvas');
+  phCanvas.width = 512;
+  phCanvas.height = 384;
+  const pctx = phCanvas.getContext('2d');
+  const pGrad = pctx.createLinearGradient(0, 0, 0, 384);
+  pGrad.addColorStop(0, '#f6efe4');
+  pGrad.addColorStop(1, '#e7dccb');
+  pctx.fillStyle = pGrad;
+  pctx.fillRect(0, 0, 512, 384);
+  // Subtle mat border & photo corners
+  pctx.strokeStyle = '#9a826b';
+  pctx.lineWidth = 4;
+  pctx.strokeRect(24, 24, 464, 336);
+  pctx.strokeStyle = '#c5ad93';
+  pctx.lineWidth = 2;
+  pctx.setLineDash([8, 6]);
+  pctx.strokeRect(42, 42, 428, 300);
+  pctx.setLineDash([]);
+  // Photo mounting corners
+  pctx.fillStyle = '#6f5542';
+  for (const [cx, cy, dx, dy] of [
+    [36, 36, 1, 1],
+    [476, 36, -1, 1],
+    [36, 348, 1, -1],
+    [476, 348, -1, -1]
+  ]) {
+    pctx.beginPath();
+    pctx.moveTo(cx, cy);
+    pctx.lineTo(cx + dx * 28, cy);
+    pctx.lineTo(cx, cy + dy * 28);
+    pctx.closePath();
+    pctx.fill();
+  }
+  // Sustainability leaf emblem in center (no fictional faces!)
+  pctx.save();
+  pctx.translate(256, 142);
+  pctx.fillStyle = 'rgba(105, 138, 102, 0.18)';
+  pctx.beginPath();
+  pctx.arc(0, 0, 54, 0, Math.PI * 2);
+  pctx.fill();
+  pctx.strokeStyle = '#5c7f59';
+  pctx.lineWidth = 4;
+  pctx.fillStyle = '#7ea37a';
+  pctx.beginPath();
+  pctx.moveTo(0, 34);
+  pctx.bezierCurveTo(-36, 18, -38, -24, 0, -40);
+  pctx.bezierCurveTo(38, -24, 36, 18, 0, 34);
+  pctx.fill();
+  pctx.stroke();
+  pctx.beginPath();
+  pctx.moveTo(0, 36);
+  pctx.lineTo(0, -28);
+  pctx.stroke();
+  pctx.restore();
+  // Typography
+  pctx.fillStyle = '#4e3c30';
+  pctx.textAlign = 'center';
+  pctx.font = '600 18px "Plus Jakarta Sans", sans-serif';
+  pctx.fillText('JULY 27, 2026 · UNIVERSITY', 256, 232);
+  pctx.font = 'italic 600 28px "Cormorant Garamond", Georgia, serif';
+  pctx.fillText('Sustainability Group Photo', 256, 268);
+  pctx.fillStyle = '#7d6858';
+  pctx.font = '500 15px "Plus Jakarta Sans", sans-serif';
+  pctx.fillText('[ Reserved for Real Group Photograph ]', 256, 304);
+  const assignmentPlaceholderTex = new T.CanvasTexture(phCanvas);
+  assignmentPlaceholderTex.colorSpace = T.SRGBColorSpace;
+
+  // 2. Memory 03 & 08: University exam paper / lecture notes sheet
+  const exCanvas = document.createElement('canvas');
+  exCanvas.width = 256;
+  exCanvas.height = 340;
+  const exCtx = exCanvas.getContext('2d');
+  exCtx.fillStyle = '#f8f3ea';
+  exCtx.fillRect(0, 0, 256, 340);
+  exCtx.fillStyle = '#3d4c63';
+  exCtx.fillRect(20, 22, 140, 10);
+  exCtx.fillStyle = '#7b8ba1';
+  exCtx.fillRect(20, 40, 95, 6);
+  exCtx.strokeStyle = '#c4baa8';
+  exCtx.lineWidth = 2;
+  exCtx.strokeRect(18, 16, 220, 308);
+  for (let y = 68; y < 300; y += 18) {
+    exCtx.strokeStyle = 'rgba(130, 148, 170, 0.45)';
+    exCtx.beginPath();
+    exCtx.moveTo(28, y);
+    exCtx.lineTo(226, y);
+    exCtx.stroke();
+    if (y % 36 === 0) {
+      exCtx.fillStyle = 'rgba(70, 82, 98, 0.65)';
+      exCtx.fillRect(32, y - 9, 110 + ((y * 13) % 65), 4);
+    }
+  }
+  // Subtle exam checkmark / box in corner
+  exCtx.strokeStyle = '#c45b5b';
+  exCtx.lineWidth = 3;
+  exCtx.strokeRect(184, 24, 42, 32);
+  exCtx.beginPath();
+  exCtx.moveTo(193, 40);
+  exCtx.lineTo(202, 48);
+  exCtx.lineTo(218, 30);
+  exCtx.stroke();
+  const examSheetTex = new T.CanvasTexture(exCanvas);
+  examSheetTex.colorSpace = T.SRGBColorSpace;
+
+  // 3. Memory 04 & 10: Smartphone lock/notification screen (simple "Hi", no invented chat log)
+  const phoneCanvas = document.createElement('canvas');
+  phoneCanvas.width = 256;
+  phoneCanvas.height = 512;
+  const phCtx = phoneCanvas.getContext('2d');
+  const scrGrad = phCtx.createLinearGradient(0, 0, 0, 512);
+  scrGrad.addColorStop(0, '#1d2438');
+  scrGrad.addColorStop(0.5, '#2b334d');
+  scrGrad.addColorStop(1, '#3b2d44');
+  phCtx.fillStyle = scrGrad;
+  phCtx.fillRect(0, 0, 256, 512);
+  // Clock indicator
+  phCtx.fillStyle = 'rgba(255, 246, 235, 0.9)';
+  phCtx.textAlign = 'center';
+  phCtx.font = '300 54px "Plus Jakarta Sans", sans-serif';
+  phCtx.fillText('18:42', 128, 128);
+  // Warm notification card ("Hi") — high contrast against bloom
+  phCtx.fillStyle = 'rgba(34, 28, 44, 0.92)';
+  phCtx.strokeStyle = '#e8b878';
+  phCtx.lineWidth = 4;
+  phCtx.beginPath();
+  phCtx.roundRect(22, 200, 212, 92, 18);
+  phCtx.fill();
+  phCtx.stroke();
+  phCtx.fillStyle = '#e8b878';
+  phCtx.textAlign = 'left';
+  phCtx.font = '700 16px "Plus Jakarta Sans", sans-serif';
+  phCtx.fillText('NEW MESSAGE', 42, 234);
+  phCtx.fillStyle = '#fff5e6';
+  phCtx.font = '700 30px "Plus Jakarta Sans", sans-serif';
+  phCtx.fillText('“Hi”', 42, 272);
+  const phoneLockTex = new T.CanvasTexture(phoneCanvas);
+  phoneLockTex.colorSpace = T.SRGBColorSpace;
+
+  // 4. Memory 07: Choir & organ sheet music notation
+  const smCanvas = document.createElement('canvas');
+  smCanvas.width = 512;
+  smCanvas.height = 340;
+  const smCtx = smCanvas.getContext('2d');
+  smCtx.fillStyle = '#f7f0e2';
+  smCtx.fillRect(0, 0, 512, 340);
+  // Center book fold shadow
+  const foldG = smCtx.createLinearGradient(236, 0, 276, 0);
+  foldG.addColorStop(0, 'rgba(90,70,50,0)');
+  foldG.addColorStop(0.5, 'rgba(90,70,50,0.28)');
+  foldG.addColorStop(1, 'rgba(90,70,50,0)');
+  smCtx.fillStyle = foldG;
+  smCtx.fillRect(236, 0, 40, 340);
+  // Staff lines & notes on both pages
+  smCtx.strokeStyle = '#5c4d3d';
+  smCtx.fillStyle = '#3b2f25';
+  for (const pageX of [28, 278]) {
+    smCtx.fillRect(pageX + 45, 24, 110, 7);
+    for (let staff = 0; staff < 4; staff++) {
+      const sy = 58 + staff * 66;
+      smCtx.lineWidth = 1.5;
+      for (let l = 0; l < 5; l++) {
+        smCtx.beginPath();
+        smCtx.moveTo(pageX, sy + l * 7);
+        smCtx.lineTo(pageX + 204, sy + l * 7);
+        smCtx.stroke();
+      }
+      // Measure bars & musical notes
+      for (let n = 0; n < 7; n++) {
+        const nx = pageX + 18 + n * 26;
+        const ny = sy + ((n * 11 + staff * 7) % 4) * 7;
+        smCtx.beginPath();
+        smCtx.ellipse(nx, ny, 5, 3.8, -0.3, 0, Math.PI * 2);
+        smCtx.fill();
+        smCtx.lineWidth = 2;
+        smCtx.beginPath();
+        smCtx.moveTo(nx + 4, ny);
+        smCtx.lineTo(nx + 4, ny - 20);
+        smCtx.stroke();
+      }
+    }
+  }
+  const sheetMusicTex = new T.CanvasTexture(smCanvas);
+  sheetMusicTex.colorSpace = T.SRGBColorSpace;
+
+  // 5. Memory 09: Library study room whiteboard ("Hirushi × Menaka")
+  const wbCanvas = document.createElement('canvas');
+  wbCanvas.width = 512;
+  wbCanvas.height = 320;
+  const wbCtx = wbCanvas.getContext('2d');
+  wbCtx.fillStyle = '#f7f9fc';
+  wbCtx.fillRect(0, 0, 512, 320);
+  // Subtle dry-erase smudge & grid wireframe diagram on left
+  wbCtx.strokeStyle = 'rgba(70, 105, 155, 0.35)';
+  wbCtx.lineWidth = 3;
+  wbCtx.strokeRect(28, 36, 130, 90);
+  wbCtx.beginPath();
+  wbCtx.moveTo(28, 60);
+  wbCtx.lineTo(158, 60);
+  wbCtx.stroke();
+  wbCtx.strokeRect(40, 72, 46, 40);
+  wbCtx.strokeRect(96, 72, 50, 40);
+  // Prominent marker writing: "Hirushi × Menaka"
+  wbCtx.save();
+  wbCtx.translate(275, 165);
+  wbCtx.rotate(-0.04);
+  wbCtx.fillStyle = '#24477a';
+  wbCtx.textAlign = 'center';
+  wbCtx.font = '700 42px "Comic Sans MS", "Segoe Print", "Plus Jakarta Sans", cursive, sans-serif';
+  wbCtx.fillText('Hirushi × Menaka', 0, 0);
+  // Marker underline flourish
+  wbCtx.strokeStyle = '#c84b6b';
+  wbCtx.lineWidth = 5;
+  wbCtx.lineCap = 'round';
+  wbCtx.beginPath();
+  wbCtx.moveTo(-165, 22);
+  wbCtx.quadraticCurveTo(0, 34, 168, 16);
+  wbCtx.stroke();
+  wbCtx.restore();
+  // Small corner note "Web Project — Study Room"
+  wbCtx.fillStyle = '#53687e';
+  wbCtx.font = '600 16px "Plus Jakarta Sans", sans-serif';
+  wbCtx.fillText('Web Project · Study Room 02', 32, 282);
+  const whiteboardTex = new T.CanvasTexture(wbCanvas);
+  whiteboardTex.colorSpace = T.SRGBColorSpace;
+
+  // 6. Memory 09: Laptop web-project screen
+  const wpCanvas = document.createElement('canvas');
+  wpCanvas.width = 256;
+  wpCanvas.height = 160;
+  const wpCtx = wpCanvas.getContext('2d');
+  wpCtx.fillStyle = '#1b2230';
+  wpCtx.fillRect(0, 0, 256, 160);
+  wpCtx.fillStyle = '#273144';
+  wpCtx.fillRect(0, 0, 56, 160);
+  wpCtx.fillStyle = '#f2ede4';
+  wpCtx.fillRect(68, 16, 172, 128);
+  wpCtx.fillStyle = '#6b94b8';
+  wpCtx.fillRect(76, 24, 156, 26);
+  wpCtx.fillStyle = '#d8b4a0';
+  wpCtx.fillRect(76, 58, 74, 68);
+  wpCtx.fillStyle = '#9bb89e';
+  wpCtx.fillRect(158, 58, 74, 68);
+  const webProjectScreenTex = new T.CanvasTexture(wpCanvas);
+  webProjectScreenTex.colorSpace = T.SRGBColorSpace;
+
+  // 7. Memory 10: Atmospheric late-night movie screen (origami yellow paper boat & warm crimson-amber reflection, no copyrighted film art)
+  const mvCanvas = document.createElement('canvas');
+  mvCanvas.width = 512;
+  mvCanvas.height = 320;
+  const mvCtx = mvCanvas.getContext('2d');
+  const mvGrad = mvCtx.createLinearGradient(0, 0, 0, 320);
+  mvGrad.addColorStop(0, '#0d101d');
+  mvGrad.addColorStop(0.58, '#1a1b2f');
+  mvGrad.addColorStop(1, '#261824');
+  mvCtx.fillStyle = mvGrad;
+  mvCtx.fillRect(0, 0, 512, 320);
+  // Subtle crimson-amber streetlight reflection on dark rain puddle
+  const refGrad = mvCtx.createRadialGradient(256, 220, 8, 256, 220, 145);
+  refGrad.addColorStop(0, 'rgba(235, 92, 75, 0.52)');
+  refGrad.addColorStop(0.5, 'rgba(245, 162, 92, 0.22)');
+  refGrad.addColorStop(1, 'rgba(20, 18, 30, 0)');
+  mvCtx.fillStyle = refGrad;
+  mvCtx.fillRect(0, 120, 512, 200);
+  // Rain streaks
+  mvCtx.strokeStyle = 'rgba(185, 205, 235, 0.22)';
+  mvCtx.lineWidth = 1.5;
+  for (let i = 0; i < 42; i++) {
+    const rx = (i * 47) % 500;
+    const ry = (i * 29) % 240;
+    mvCtx.beginPath();
+    mvCtx.moveTo(rx, ry);
+    mvCtx.lineTo(rx - 8, ry + 26);
+    mvCtx.stroke();
+  }
+  // Yellow paper origami boat silhouette floating at center
+  mvCtx.save();
+  mvCtx.translate(256, 208);
+  mvCtx.fillStyle = '#f2c14e';
+  mvCtx.beginPath();
+  mvCtx.moveTo(-48, 0);
+  mvCtx.lineTo(48, 0);
+  mvCtx.lineTo(32, 20);
+  mvCtx.lineTo(-32, 20);
+  mvCtx.closePath();
+  mvCtx.fill();
+  mvCtx.fillStyle = '#ffd972';
+  mvCtx.beginPath();
+  mvCtx.moveTo(0, -34);
+  mvCtx.lineTo(24, 0);
+  mvCtx.lineTo(-24, 0);
+  mvCtx.closePath();
+  mvCtx.fill();
+  mvCtx.restore();
+  const movieScreenTex = new T.CanvasTexture(mvCanvas);
+  movieScreenTex.colorSpace = T.SRGBColorSpace;
+
   return {
     textures: {
       grassTex,
@@ -276,7 +574,14 @@ export function createMaterialLibrary(renderer) {
       cinemaArtTex,
       welcomeSignTex,
       glowTex,
-      blossomTex
+      blossomTex,
+      assignmentPlaceholderTex,
+      examSheetTex,
+      phoneLockTex,
+      sheetMusicTex,
+      whiteboardTex,
+      webProjectScreenTex,
+      movieScreenTex
     },
     materials: {
       barkMat,

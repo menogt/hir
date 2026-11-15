@@ -417,14 +417,52 @@ function teleportToNode(nodeIdx, openImmediately = false) {
   }
 }
 
+let detailCameraView = null;
+
+function setSceneFocus(mode) {
+  const wbBtn = $('focusWhiteboard');
+  const keyBtn = $('focusBrokenKey');
+  const ovBtn = $('focusOverview');
+  wbBtn?.classList.toggle('active', mode === 'whiteboard');
+  keyBtn?.classList.toggle('active', mode === 'key');
+  ovBtn?.classList.toggle('active', mode === 'overview');
+
+  if (mode === 'whiteboard') {
+    $('message').classList.add('inspecting-detail');
+    detailCameraView = {
+      pos: [1.85, 1.38, -24.08],
+      look: [1.88, 1.15, -25.18]
+    };
+  } else if (mode === 'key') {
+    $('message').classList.add('inspecting-detail');
+    detailCameraView = {
+      pos: [2.72, 0.92, -24.05],
+      look: [2.98, 0.56, -24.68]
+    };
+  } else {
+    $('message').classList.remove('inspecting-detail');
+    detailCameraView = null;
+  }
+}
+
+$('focusWhiteboard')?.addEventListener('click', () => setSceneFocus('whiteboard'));
+$('focusBrokenKey')?.addEventListener('click', () => setSceneFocus('key'));
+$('focusOverview')?.addEventListener('click', () => setSceneFocus('overview'));
+
 function closeMessage() {
   $('message').hidden = true;
+  $('message').classList.remove('inspecting-detail');
+  detailCameraView = null;
   activeNode = null;
   keys.clear();
 }
 
 function openNodePanel(node, nodeIdx) {
   activeNode = node;
+  setSceneFocus('overview');
+  if ($('sceneFocusBar')) {
+    $('sceneFocusBar').hidden = node.id !== 'memory-09';
+  }
   if (node.type === 'discovery') {
     foundDiscoveries.add(node.id);
     $('chapter').textContent = `${node.chapterNumber} / ${node.name}`;
@@ -710,10 +748,11 @@ function frame(now) {
     $('place').textContent = node.type === 'memory' ? `${node.code} · ${node.title.toUpperCase()}` : node.name;
   }
 
-  // Eye-level, cinematic third-person follow camera (or test bookmark override)
-  if (overrideCameraView) {
-    camera.position.set(...overrideCameraView.pos);
-    camera.lookAt(...overrideCameraView.look);
+  // Eye-level, cinematic third-person follow camera (or test bookmark / detail override)
+  const activeViewOverride = overrideCameraView || detailCameraView;
+  if (activeViewOverride) {
+    camera.position.set(...activeViewOverride.pos);
+    camera.lookAt(...activeViewOverride.look);
   } else {
     const camDist = 4.4;
     const camH = 1.92;
@@ -751,14 +790,24 @@ function frame(now) {
     animatedProps.cupcake.flame.scale.set(0.75, 1.45 * f, 0.75);
     animatedProps.cupcake.halo.scale.setScalar(0.3 + Math.sin(t * 8) * 0.04);
   }
-  if (animatedProps.phone) {
-    const pulse = 1 + Math.sin(t * 4.2) * 0.2;
-    animatedProps.phone.ring.scale.set(pulse, pulse, 1);
-    animatedProps.phone.group.rotation.y = Math.sin(t * 11) * 0.035;
+  if (animatedProps.firstTextPhone) {
+    const fp = animatedProps.firstTextPhone;
+    const dPhone = Math.hypot(player.position.x - fp.location.x, player.position.z - fp.location.z);
+    const wake = dPhone < 4.2 ? 1.0 : 0.22;
+    const pulse = 0.85 + Math.sin(t * 4.5) * 0.2;
+    fp.screenMat.emissiveIntensity = T.MathUtils.lerp(fp.screenMat.emissiveIntensity, wake * 0.78 * pulse, dt * 5);
+    fp.halo.material.opacity = T.MathUtils.lerp(fp.halo.material.opacity, wake * 0.38 * pulse, dt * 5);
+    fp.light.intensity = T.MathUtils.lerp(fp.light.intensity, wake * 1.55 * pulse, dt * 5);
+    const rScale = 1 + Math.sin(t * 3.8) * (dPhone < 4.2 ? 0.18 : 0.05);
+    fp.ring.scale.set(rScale, rScale, 1);
   }
-  if (animatedProps.futureFrame) {
-    animatedProps.futureFrame.position.y = 1.55 + Math.sin(t * 1.5) * 0.07;
-    animatedProps.futureFrame.rotation.y = Math.sin(t * 0.5) * 0.1;
+  if (animatedProps.movieNight) {
+    const mn = animatedProps.movieNight;
+    mn.motes.forEach((m, idx) => {
+      const wave = 0.5 + 0.5 * Math.sin(t * 3.2 - m.phase);
+      m.mesh.position.y = m.baseY + Math.sin(t * 2.4 + idx) * 0.025;
+      m.mesh.scale.setScalar(0.68 + wave * 0.55);
+    });
   }
 
   // Fireflies & falling blossom petals
