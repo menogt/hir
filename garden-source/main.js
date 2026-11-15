@@ -1,57 +1,862 @@
-import * as T from 'three';import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';import './style.css';
-const $=id=>document.getElementById(id),mobile=innerWidth<700,reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-let renderer;try{renderer=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance'});}catch{$('entry').innerHTML='<div><h1>A little place</h1><p>This garden needs WebGL. Please open it in a recent Chrome, Safari, or Edge browser.</p></div>';throw Error('WebGL unavailable')}
-renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,mobile?1.5:2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;$('world').append(renderer.domElement);
-const scene=new T.Scene();scene.background=new T.Color('#738c9c');scene.fog=new T.FogExp2('#738c9c',.019);const camera=new T.PerspectiveCamera(mobile?62:55,innerWidth/innerHeight,.1,240);const hemi=new T.HemisphereLight('#ffe9e4','#33473e',2.1);scene.add(hemi);const sun=new T.DirectionalLight('#ffe0b5',2.5);sun.position.set(-20,30,15);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-35,right:35,top:40,bottom:-40,near:1,far:100});sun.shadow.bias=-.0005;scene.add(sun);
-let seed=78;const rand=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};const mat=(c,extra={})=>new T.MeshStandardMaterial({color:c,roughness:.85,...extra});const moss=mat('#576e53'),wood=mat('#54473e'),stone=mat('#a1a292'),pink=mat('#efb5c5'),pinkLight=mat('#f7d3d9'),dark=mat('#33483d');
-function mesh(geo,m,x=0,y=0,z=0,parent=scene){const o=new T.Mesh(geo,m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;parent.add(o);return o}
-const floor=mesh(new T.CircleGeometry(65,96),moss);floor.rotation.x=-Math.PI/2;floor.position.y=-.15;
-const colliders=[];function branch(a,b,r,parent){const delta=b.clone().sub(a);const o=mesh(new T.CylinderGeometry(r*.5,r,delta.length(),7),wood,0,0,0,parent);o.position.copy(a).add(b).multiplyScalar(.5);o.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),delta.normalize());}
-// All geometry is volumetric. Repeated blossom clusters use GPU instancing.
-const blossomData=[];function tree(x,z,size=1){const g=new T.Group();scene.add(g);g.position.set(x,0,z);colliders.push({x,z,r:.65*size});branch(new T.Vector3(0,0,0),new T.Vector3(.2,3.2*size,0),.3*size,g);for(let i=0;i<7;i++){let a=i*2.399,reach=(1.5+rand())*size;let end=new T.Vector3(Math.cos(a)*reach,(3.3+rand()*1.5)*size,Math.sin(a)*reach);branch(new T.Vector3(.1,2.1*size,0),end,.13*size,g);for(let j=0;j<70;j++){const radius=rand()*1.2*size,phi=rand()*Math.PI*2;blossomData.push({x:x+end.x+Math.cos(phi)*radius,y:end.y+(rand()-.5)*1.1*size,z:z+end.z+Math.sin(phi)*radius,s:(.10+rand()*.18)*size,c:rand()})}}}
-for(let i=0;i<8;i++){tree(-5.8-rand()*2,17-i*6,1+rand()*.3);tree(5.8+rand()*2,15-i*6,1+rand()*.3)}tree(-2,-31,1.55);tree(4,-32,1.4);
-const petalParts=[];for(let i=0;i<5;i++){const g=new T.IcosahedronGeometry(.55,0);g.scale(.65,.2,1);g.translate(0,0,.4);g.rotateY(i*Math.PI*2/5);petalParts.push(g)}const blossomShape=mergeGeometries(petalParts);const blossoms=new T.InstancedMesh(blossomShape,pink,blossomData.length),dummy=new T.Object3D();blossomData.forEach((p,i)=>{dummy.position.set(p.x,p.y,p.z);dummy.scale.set(p.s,p.s,p.s);dummy.rotation.set(rand()*2,rand()*6,rand()*2);dummy.updateMatrix();blossoms.setMatrixAt(i,dummy.matrix);blossoms.setColorAt(i,new T.Color().lerpColors(new T.Color('#c987a4'),new T.Color('#ffe2dd'),p.c))});blossoms.castShadow=true;scene.add(blossoms);
-function pathX(z){return Math.sin(z*.14)*1.6}
-for(let z=22;z>-33;z-=1.25){for(let j=-1;j<=1;j++){const s=mesh(new T.CylinderGeometry(.63+rand()*.1,.68,.14,7),stone,pathX(z)+j*1.05+(rand()-.5)*.12,.03,z);s.rotation.y=rand()*3;s.scale.z=.85+rand()*.3;}}
-// Mossy rock banks and flowering groundcover.
-const rockGeo=new T.DodecahedronGeometry(1,0);for(let i=0;i<100;i++){const x=(rand()<.5?-1:1)*(3.7+rand()*19),z=22-rand()*60;const rock=mesh(rockGeo,rand()>.5?moss:mat('#6c7870'),x,0,z);rock.scale.set(.3+rand(),.2+rand()*.5,.4+rand());rock.rotation.y=rand()*6;}
-const flowerData=[];for(let i=0;i<1800;i++){let z=23-rand()*58,x=(rand()<.5?-1:1)*(3+rand()*8);flowerData.push({x,y:.14+rand()*.35,z})}const flowers=new T.InstancedMesh(new T.IcosahedronGeometry(.09,0),pinkLight,flowerData.length);flowerData.forEach((p,i)=>{dummy.position.set(p.x,p.y,p.z);dummy.scale.set(1,1,1);dummy.updateMatrix();flowers.setMatrixAt(i,dummy.matrix)});scene.add(flowers);
-const lamps=[];function lantern(x,z,large=false){const g=new T.Group();g.position.set(x,0,z);scene.add(g);mesh(new T.CylinderGeometry(.35,.45,.25,8),wood,0,.12,0,g);mesh(new T.BoxGeometry(.48,.7,.48),mat('#ffd997',{emissive:'#ffb449',emissiveIntensity:1.5}),0,.6,0,g);for(const a of [-1,1])for(const b of [-1,1])mesh(new T.BoxGeometry(.055,.85,.055),wood,a*.25,.65,b*.25,g);mesh(new T.ConeGeometry(.52,.3,4),wood,0,1.17,0,g).rotation.y=Math.PI/4;const light=new T.PointLight('#ffbd6d',large?9:3,5,2);light.position.set(0,.8,0);g.add(light);if(large)g.scale.setScalar(1.6);lamps.push(light);return g}
-for(let z=17;z>-31;z-=7){lantern(pathX(z)-2.2,z);lantern(pathX(z)+2.2,z-3)}const gateLamp=lantern(-1,15,true);
-// Pond, bridge, and mountain silhouettes form actual spatial landmarks.
-const pond=mesh(new T.CircleGeometry(5.5,64),mat('#477e89',{metalness:.45,roughness:.2,transparent:true,opacity:.85}),-10,-.04,-2);pond.rotation.x=-Math.PI/2;for(let i=0;i<24;i++){let a=i/24*Math.PI*2;let o=mesh(rockGeo,stone,-10+Math.cos(a)*5.8,.1,-2+Math.sin(a)*5.8);o.scale.set(.6,.4,.7)}
-for(let i=0;i<20;i++){let x=-12+i*.25;mesh(new T.BoxGeometry(.22,.15,1.7),wood,x,.25+Math.sin(i/19*Math.PI)*.45,-2)}
-for(let i=0;i<18;i++){let o=mesh(new T.ConeGeometry(8+rand()*8,15+rand()*20,5),mat(i%2?'#647e88':'#8195a0'),-70+i*9,4,-70-rand()*20);o.rotation.y=rand()*2;}
-function glowTexture(){const c=document.createElement('canvas');c.width=c.height=128;const ctx=c.getContext('2d'),g=ctx.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'rgba(255,240,184,1)');g.addColorStop(.12,'rgba(255,220,143,.7)');g.addColorStop(.4,'rgba(255,220,143,.15)');g.addColorStop(1,'rgba(255,220,143,0)');ctx.fillStyle=g;ctx.fillRect(0,0,128,128);return new T.CanvasTexture(c)}const glowMap=glowTexture();function glow(x,y,z,s=1){const sprite=new T.Sprite(new T.SpriteMaterial({map:glowMap,transparent:true,depthWrite:false,blending:T.AdditiveBlending}));sprite.position.set(x,y,z);sprite.scale.set(s,s,s);scene.add(sprite);return sprite}
-mesh(new T.SphereGeometry(3,32,24),new T.MeshBasicMaterial({color:'#fff1d1'}),16,18,-52);glow(16,18,-52,10);
-const wisps=[];for(let i=0;i<32;i++){const o=glow((rand()-.5)*24,.5+rand()*2,20-rand()*50,.3+rand()*.5);wisps.push({o,x:o.position.x,y:o.position.y,z:o.position.z,phase:rand()*6})}
-const petalCount=mobile?70:160,petals=new T.InstancedMesh(new T.SphereGeometry(.045,4,3),pinkLight,petalCount),petalData=Array.from({length:petalCount},()=>({x:(rand()-.5)*20,y:rand()*7,z:20-rand()*54,p:rand()*6}));scene.add(petals);if(reduced)petals.count=0;
-const player=new T.Group();scene.add(player);player.position.set(0,0,21);const body=mesh(new T.SphereGeometry(.22,16,12),mat('#fff4d5',{emissive:'#ffd785',emissiveIntensity:.55}),0,.45,0,player);body.scale.y=1.25;const wingMat=new T.MeshStandardMaterial({color:'#e7eff0',transparent:true,opacity:.75,side:T.DoubleSide});const wings=[];for(let side of [-1,1]){const w=mesh(new T.SphereGeometry(.18,12,8),wingMat,side*.23,.55,0,player);w.scale.set(1,.1,1.6);wings.push(w)}const aura=glow(0,.45,21,1.1);
-const ghost=new T.Group();ghost.position.set(2,1,-12);scene.add(ghost);const ghostMat=mat('#e8e8df',{emissive:'#98abc1',emissiveIntensity:.15});mesh(new T.SphereGeometry(.38,20,16),ghostMat,0,.25,0,ghost);mesh(new T.CylinderGeometry(.38,.43,.45,20),ghostMat,0,0,0,ghost);for(let x of [-.13,.13])mesh(new T.SphereGeometry(.045,8,6),dark,x,.3,.33,ghost);
-const bloom=new T.Group();scene.add(bloom);bloom.position.set(0,.5,-28);const bloomPetals=[];for(let i=0;i<7;i++){const g=new T.Group();g.rotation.y=i/7*Math.PI*2;bloom.add(g);const p=mesh(new T.SphereGeometry(.5,16,12),pinkLight,0,.35,.28,g);p.scale.set(.6,1.3,.3);p.rotation.x=-.3;bloomPetals.push(p)}mesh(new T.SphereGeometry(.18,16,12),mat('#ffe9a2',{emissive:'#ffcc69',emissiveIntensity:.8}),0,.3,0,bloom);
-const stations=[{x:-1,z:15,label:'Light the lantern',name:'THE LANTERN GATE',title:'Just keep <em>walking.</em>',copy:'There are a few little things I wanted to show you.'},{x:-3,z:-1,label:'Follow the firefly',name:'THE FIREFLY POND',title:'Our random chats <em>make me smile.</em>',copy:'Even the ones that make absolutely no sense 😂'},{x:2,z:-12,label:'Say hello',name:'SOMEWHERE ALONG THE PATH',title:"Still can't believe you enjoy <em>horror movies.</em>",copy:"I'd be the first one hiding behind a pillow."},{x:0,z:-28,label:'Open the blossom',name:'ONE LAST THING',title:"I'm really glad <em>we met.</em>",copy:'Thanks for being you, Hirushi :)'}];
-const rings=[];stations.forEach((s,i)=>{let r=mesh(new T.RingGeometry(.7,.75,48),new T.MeshBasicMaterial({color:'#ffe0aa',transparent:true,opacity:.6,side:T.DoubleSide}),s.x,.08,s.z);r.rotation.x=-Math.PI/2;rings.push(r);if(i===1)glow(s.x,1.1,s.z,1.8)});
-// Bake static geometry into material batches; interactive characters retain independent transforms.
-scene.updateMatrixWorld(true);const batches=new Map(),remove=[];const dynamicRoots=new Set([player,ghost,bloom,...rings]);
-scene.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||Array.isArray(o.material))return;let a=o;while(a){if(dynamicRoots.has(a))return;a=a.parent}const m=o.material,key=[m.type,m.color?.getHex(),m.emissive?.getHex(),m.emissiveIntensity,m.roughness,m.metalness,m.opacity,m.transparent,m.side].join(':');if(!batches.has(key))batches.set(key,{material:m,geometries:[]});let g=o.geometry.clone().applyMatrix4(o.matrixWorld);if(g.index)g=g.toNonIndexed();batches.get(key).geometries.push(g);remove.push(o)});remove.forEach(o=>o.removeFromParent());for(const b of batches.values()){const g=mergeGeometries(b.geometries);if(g){const o=new T.Mesh(g,b.material);o.castShadow=true;o.receiveShadow=true;scene.add(o)}b.geometries.forEach(g=>g.dispose())}
-let started=false,sound=true,nearest=-1,active=-1,yaw=0,found=new Set(),last=performance.now(),keys=new Set(),stick={x:0,y:0},drag=null,opening=0;
-const ambience=new Audio('./assets/garden-ambience.ogg');ambience.loop=true;ambience.volume=.85;let audio;function chime(notes){if(!sound)return;audio??=new(window.AudioContext||window.webkitAudioContext)();audio.resume();notes.forEach((f,i)=>{let o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime+i*.16;o.frequency.value=f;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.045,t+.03);g.gain.exponentialRampToValueAtTime(.0001,t+1.6);o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+1.7)})}
-$('begin').onclick=()=>{started=true;document.body.classList.add('playing');$('entry').classList.add('leaving');setTimeout(()=>$('entry').hidden=true,1100);if(sound)ambience.play().catch(()=>{});chime([392,523.25,659.25])};$('sound').onclick=()=>{sound=!sound;$('sound').textContent=sound?'♫ sound on':'♫ sound off';$('sound').setAttribute('aria-pressed',String(sound));if(sound&&started)ambience.play().catch(()=>{});else{ambience.pause();audio?.suspend()}};
-function visit(i){let s=stations[i];player.position.set(s.x,0,s.z+2.6);yaw=0;closeMessage();$('map').hidden=true;$('mapButton').setAttribute('aria-expanded','false');keys.clear()}
-$('mapButton').onclick=()=>{let open=$('map').hidden;$('map').hidden=!open;$('mapButton').setAttribute('aria-expanded',String(open));if(open)$('map').querySelector('button').focus()};document.querySelectorAll('[data-place]').forEach(b=>b.onclick=()=>visit(Number(b.dataset.place)));$('home').onclick=$('reset').onclick=()=>{player.position.set(0,0,21);yaw=0;closeMessage();$('map').hidden=true;keys.clear()};
-function closeMessage(){$('message').hidden=true;active=-1;keys.clear();$('interact').focus()}
-$('closeMessage').onclick=()=>{if(active===3){$('note').showModal();$('closeNote').focus()}else closeMessage()};$('closeNote').onclick=()=>{$('note').close();closeMessage()};$('note').addEventListener('close',()=>{$('interact').focus();keys.clear()});
-function interact(){if(nearest<0||!$('message').hidden||$('note').open)return;let s=stations[nearest];active=nearest;found.add(active);$('count').textContent=`${found.size} / 4 little moments`;$('chapter').textContent=`0${active+1} / ${s.name}`;$('title').innerHTML=s.title;$('copy').textContent=s.copy;$('closeMessage').textContent=active===3?'one tiny surprise ✧':'keep exploring ↗';$('message').hidden=false;$('closeMessage').focus();chime([392+active*65,523.25,783.99]);rings[active].material.color.set('#c8e9b9');if(active===0)gateLamp.children.at(-1).intensity=18;if(active===3)opening=1;keys.clear()}
-$('interact').onclick=interact;addEventListener('keydown',e=>{if(e.target.tagName==='BUTTON'&&[' ','Enter'].includes(e.key))return;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();keys.add(e.code);if(e.code==='KeyE'&&!e.repeat)interact();if(e.code==='Escape'){closeMessage();$('map').hidden=true}if(e.code==='KeyM'&&!e.repeat)$('mapButton').click()});addEventListener('keyup',e=>keys.delete(e.code));addEventListener('blur',()=>{keys.clear();stick.x=stick.y=0});
-renderer.domElement.addEventListener('pointerdown',e=>{drag={id:e.pointerId,x:e.clientX};renderer.domElement.setPointerCapture(e.pointerId)});renderer.domElement.addEventListener('pointermove',e=>{if(drag&&drag.id===e.pointerId){yaw-=(e.clientX-drag.x)*.005;drag.x=e.clientX}});renderer.domElement.addEventListener('pointerup',()=>drag=null);renderer.domElement.addEventListener('pointercancel',()=>drag=null);
-const joy=$('joystick');function stickMove(e){const r=joy.getBoundingClientRect();let x=(e.clientX-r.left-r.width/2)/35,y=(e.clientY-r.top-r.height/2)/35,l=Math.max(1,Math.hypot(x,y));stick.x=x/l;stick.y=y/l;joy.firstElementChild.style.transform=`translate(${stick.x*32}px,${stick.y*32}px)`}joy.onpointerdown=e=>{joy.setPointerCapture(e.pointerId);stickMove(e)};joy.onpointermove=e=>{if(joy.hasPointerCapture(e.pointerId))stickMove(e)};joy.onpointerup=joy.onpointercancel=()=>{stick.x=stick.y=0;joy.firstElementChild.style.transform='none'};
-document.addEventListener('visibilitychange',()=>{keys.clear();stick.x=stick.y=0;if(document.hidden){ambience.pause();audio?.suspend()}else if(started&&sound)ambience.play().catch(()=>{})});
-const camTarget=new T.Vector3(),look=new T.Vector3();camera.position.set(0,5,29);function frame(now){requestAnimationFrame(frame);let dt=Math.min((now-last)/1000,.05);last=now;if(document.hidden)return;let t=now/1000;
-if(started&&$('message').hidden&&!$('note').open&&$('map').hidden){let x=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'))+stick.x,z=Number(keys.has('KeyS')||keys.has('ArrowDown'))-Number(keys.has('KeyW')||keys.has('ArrowUp'))+stick.y;let len=Math.max(1,Math.hypot(x,z));x/=len;z/=len;const dx=(x*Math.cos(yaw)+z*Math.sin(yaw))*dt*3.6,dz=(-x*Math.sin(yaw)+z*Math.cos(yaw))*dt*3.6;let nx=T.MathUtils.clamp(player.position.x+dx,-16,16),nz=T.MathUtils.clamp(player.position.z+dz,-34,24);const blocked=colliders.some(c=>Math.hypot(nx-c.x,nz-c.z)<c.r+.25)||Math.hypot(nx+10,nz+2)<5.7;if(!blocked){player.position.x=nx;player.position.z=nz}if(Math.hypot(x,z)>.1)player.rotation.y=Math.atan2(dx,dz);}
-nearest=-1;let dist=3.5;stations.forEach((s,i)=>{const d=Math.hypot(s.x-player.position.x,s.z-player.position.z);if(d<dist){dist=d;nearest=i}});$('interact').hidden=!started||nearest<0||!$('message').hidden||$('note').open;if(nearest>=0){$('interact').textContent=stations[nearest].label+(mobile?'':' · E');$('place').textContent=stations[nearest].name}
-camTarget.set(player.position.x+Math.sin(yaw)*8,5.1,player.position.z+Math.cos(yaw)*8);camera.position.lerp(camTarget,reduced?1:1-Math.exp(-dt*4));look.set(player.position.x,1.5,player.position.z-1);camera.lookAt(look);body.position.y=.45+(reduced?0:Math.sin(t*3)*.06);aura.position.copy(player.position);aura.position.y=.5;wings.forEach((w,i)=>w.rotation.z=reduced?0:Math.sin(t*18)*(i?1:-1)*.3);ghost.position.y=1+(reduced?0:Math.sin(t*2)*.15);ghost.rotation.y=Math.sin(t*.6)*.3;
-wisps.forEach(w=>{w.o.position.x=w.x+Math.sin(t*.5+w.phase)*.7;w.o.position.y=w.y+Math.sin(t+w.phase)*.25});if(!reduced){petalData.forEach((p,i)=>{p.y-=dt*.35;if(p.y<0)p.y=7;dummy.position.set(p.x+Math.sin(t*.4+p.p),p.y,p.z);dummy.scale.set(1.8,.35,1);dummy.rotation.set(t*.3+p.p,0,t*.5);dummy.updateMatrix();petals.setMatrixAt(i,dummy.matrix)});petals.instanceMatrix.needsUpdate=true;}bloomPetals.forEach(p=>{p.rotation.x=T.MathUtils.lerp(p.rotation.x,opening?-1.25:-.3,dt*2);p.position.z=T.MathUtils.lerp(p.position.z,opening?.55:.28,dt*2)});renderer.render(scene,camera)}requestAnimationFrame(frame);
-addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
-// Read-only diagnostics for cross-device verification.
-window.gardenState=()=>({started,position:player.position.toArray(),nearest,discovered:found.size,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles});
+import * as T from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ORIGINAL_DISCOVERIES, MEMORY_TRAIL } from './memories.js';
+import { PALETTE, windUniforms, createRng, createMaterialLibrary } from './src/art/materials.js';
+import { getTerrainHeight, pondDistance, buildTerrainAndFoliage } from './src/art/terrain.js';
+import { buildSakuraTrees } from './src/art/trees.js';
+import { buildGardenPavilion, placeGardenLanterns } from './src/art/architecture.js';
+import { buildReflectivePond } from './src/art/pond.js';
+import {
+  buildMemoryLandmark,
+  buildShySpirit,
+  buildBlossomShrine,
+  buildPlayerOrb
+} from './src/art/landmarks.js';
+import './style.css';
 
+const $ = (id) => document.getElementById(id);
+const mobile = innerWidth < 720;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ============================================================================
+// RENDERER, SCENE, SKY DOME & TWILIGHT LIGHTING
+// ============================================================================
+let renderer;
+try {
+  renderer = new T.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+} catch {
+  $('entry').innerHTML =
+    '<div class="entry-card"><h1>A little place</h1><p>This garden needs WebGL. Please open it in a recent Chrome, Safari, Firefox, or Edge browser.</p></div>';
+  throw new Error('WebGL unavailable');
+}
+
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.35 : 1.75));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = T.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;
+renderer.toneMapping = T.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.info.autoReset = false;
+$('world').append(renderer.domElement);
+
+const scene = new T.Scene();
+scene.background = new T.Color('#475773');
+scene.fog = new T.FogExp2('#696682', 0.0145);
+
+const camera = new T.PerspectiveCamera(mobile ? 58 : 48, innerWidth / innerHeight, 0.1, 220);
+
+const lib = createMaterialLibrary(renderer);
+const { textures } = lib;
+
+// Twilight sky dome & PMREM environment reflections
+const skyMat = new T.MeshBasicMaterial({ map: textures.skyTex, side: T.BackSide, fog: false });
+const skyDome = new T.Mesh(new T.SphereGeometry(125, 36, 20), skyMat);
+skyDome.rotation.y = Math.PI * 0.62;
+scene.add(skyDome);
+
+const pmrem = new T.PMREMGenerator(renderer);
+const envScene = new T.Scene();
+envScene.add(new T.Mesh(new T.SphereGeometry(20, 24, 16), skyMat.clone()));
+const envRT = pmrem.fromScene(envScene, 0.04);
+scene.environment = envRT.texture;
+scene.environmentIntensity = 0.62;
+pmrem.dispose();
+
+// Crescent moon & warm dusk horizon halo
+const moon = new T.Mesh(
+  new T.SphereGeometry(2.3, 28, 20),
+  new T.MeshBasicMaterial({ color: '#fff3db', fog: false })
+);
+moon.position.set(18, 22, -62);
+scene.add(moon);
+const moonHalo = new T.Sprite(
+  new T.SpriteMaterial({
+    map: textures.glowTex,
+    transparent: true,
+    opacity: 0.42,
+    depthWrite: false,
+    blending: T.AdditiveBlending,
+    fog: false
+  })
+);
+moonHalo.position.copy(moon.position);
+moonHalo.scale.set(13, 13, 13);
+scene.add(moonHalo);
+
+// Balanced twilight lighting: warm golden sunset key + cool blue-violet shadow fill
+const hemi = new T.HemisphereLight('#d6b4c8', '#3c3633', 0.95);
+scene.add(hemi);
+
+const sun = new T.DirectionalLight('#f7c68d', 2.15);
+sun.position.set(-28, 21, -18);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1536, 1536);
+Object.assign(sun.shadow.camera, { left: -34, right: 34, top: 42, bottom: -44, near: 2, far: 105 });
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.025;
+scene.add(sun);
+
+const coolFill = new T.DirectionalLight('#6d87b0', 0.65);
+coolFill.position.set(24, 16, 26);
+scene.add(coolFill);
+
+// ============================================================================
+// ENVIRONMENT, PAVILION, POND, TREES & MEMORY LANDMARKS
+// ============================================================================
+const publicMemories = MEMORY_TRAIL.filter((m) => !m.isPrivate && m.isUnlocked !== false)
+  .sort((a, b) => a.sortOrder - b.sortOrder);
+
+const allInteractiveNodes = [
+  ...ORIGINAL_DISCOVERIES.map((d, idx) => ({ ...d, nodeIndex: idx })),
+  ...publicMemories.map((m, idx) => ({ ...m, nodeIndex: ORIGINAL_DISCOVERIES.length + idx }))
+];
+
+const landmarkCoords = allInteractiveNodes.map((n) => n.location);
+
+buildTerrainAndFoliage(scene, lib, landmarkCoords);
+const { colliders } = buildSakuraTrees(scene, lib);
+const pavilion = buildGardenPavilion(scene, lib, -4.2, -14.2);
+colliders.push(pavilion.collider);
+const lanterns = placeGardenLanterns(scene, lib);
+const pond = buildReflectivePond(scene, lib, sun.position);
+
+const animatedProps = {};
+publicMemories.forEach((m) => {
+  const res = buildMemoryLandmark(scene, lib, m);
+  Object.assign(animatedProps, res.animated);
+});
+
+const { player, body, wings, aura } = buildPlayerOrb(scene, lib);
+const { ghost, ghostEyes, baseY: ghostBaseY } = buildShySpirit(scene, lib, 2.2, -12.0);
+const { bloomPetals, coreOrb: shrineCore } = buildBlossomShrine(scene, lib, 0.0, -30.0);
+
+// Ground discovery & memory marker rings
+const rings = [];
+allInteractiveNodes.forEach((node) => {
+  const ry = getTerrainHeight(node.location.x, node.location.z) + 0.032;
+  const isMemory = node.type === 'memory';
+  const r = new T.Mesh(
+    new T.RingGeometry(isMemory ? 0.56 : 0.72, isMemory ? 0.62 : 0.78, 36),
+    new T.MeshBasicMaterial({
+      color: isMemory ? PALETTE.blossomMid : PALETTE.lanternGlow,
+      transparent: true,
+      opacity: 0.48,
+      side: T.DoubleSide
+    })
+  );
+  r.position.set(node.location.x, ry, node.location.z);
+  r.rotation.x = -Math.PI / 2;
+  scene.add(r);
+  rings.push(r);
+});
+
+// ============================================================================
+// RESTRAINED FIREFLIES, FLOATING SAKURA PETALS & DISCOVERY BURST
+// ============================================================================
+const rng = createRng(303);
+const wisps = [];
+for (let i = 0; i < 32; i++) {
+  const isPond = i < 12;
+  const wx = isPond ? -10.4 + (rng() - 0.5) * 8.5 : (rng() - 0.5) * 20;
+  const wz = isPond ? -2.2 + (rng() - 0.5) * 10.5 : 21 - rng() * 56;
+  const wy = Math.max(0.2, getTerrainHeight(wx, wz)) + 0.45 + rng() * 1.7;
+  const sp = new T.Sprite(
+    new T.SpriteMaterial({
+      map: textures.glowTex,
+      transparent: true,
+      opacity: 0.62,
+      depthWrite: false,
+      blending: T.AdditiveBlending
+    })
+  );
+  sp.position.set(wx, wy, wz);
+  const sc = 0.24 + rng() * 0.34;
+  sp.scale.set(sc, sc, sc);
+  scene.add(sp);
+  wisps.push({ o: sp, x: wx, y: wy, z: wz, phase: rng() * 6.28, baseScale: sc });
+}
+
+const maxPetals = mobile ? 75 : 145;
+const petalShape = new T.PlaneGeometry(0.085, 0.065);
+const petalFallMat = new T.MeshStandardMaterial({
+  color: PALETTE.blossomPale,
+  roughness: 0.65,
+  side: T.DoubleSide
+});
+const petals = new T.InstancedMesh(petalShape, petalFallMat, maxPetals);
+const petalData = Array.from({ length: maxPetals }, () => ({
+  x: (rng() - 0.5) * 20,
+  y: rng() * 7.5,
+  z: 22 - rng() * 58,
+  p: rng() * 6.28
+}));
+scene.add(petals);
+if (reduced) petals.count = 0;
+
+const burstCount = 22;
+const burstMesh = new T.InstancedMesh(
+  new T.SphereGeometry(0.036, 6, 4),
+  new T.MeshBasicMaterial({ color: PALETTE.lanternGlow }),
+  burstCount
+);
+burstMesh.count = 0;
+scene.add(burstMesh);
+let burstTimer = 0;
+const burstOrigin = new T.Vector3();
+
+function triggerDiscoveryBurst(x, y, z) {
+  if (reduced) return;
+  burstOrigin.set(x, y + 0.6, z);
+  burstTimer = 1.5;
+  burstMesh.count = burstCount;
+}
+
+// ============================================================================
+// SELECTIVE POST-PROCESSING & QUALITY PRESETS
+// ============================================================================
+const rt = new T.WebGLRenderTarget(innerWidth, innerHeight, {
+  type: T.HalfFloatType
+});
+const composer = new EffectComposer(renderer, rt);
+const renderPass = new RenderPass(scene, camera);
+const bloomPass = new UnrealBloomPass(
+  new T.Vector2(innerWidth, innerHeight),
+  0.24,
+  0.42,
+  0.88
+);
+const outputPass = new OutputPass();
+composer.addPass(renderPass);
+composer.addPass(bloomPass);
+composer.addPass(outputPass);
+
+const QUALITY_LEVELS = ['low', 'medium', 'high'];
+let qualityIndex = mobile ? 1 : 2;
+let usePostFX = true;
+
+function applyQualityPreset(level) {
+  if (level === 'low') {
+    renderer.setPixelRatio(1);
+    renderer.shadowMap.enabled = false;
+    sun.castShadow = false;
+    usePostFX = false;
+    pond.setReflectiveEnabled(false);
+    petals.count = reduced ? 0 : Math.floor(maxPetals * 0.35);
+    lanterns.secondaryLights.forEach((l) => (l.visible = false));
+    wisps.forEach((w, i) => (w.o.visible = i % 3 === 0));
+  } else if (level === 'medium') {
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
+    renderer.shadowMap.enabled = true;
+    sun.castShadow = true;
+    usePostFX = true;
+    bloomPass.strength = 0.2;
+    pond.setReflectiveEnabled(true);
+    petals.count = reduced ? 0 : Math.floor(maxPetals * 0.68);
+    lanterns.secondaryLights.forEach((l, i) => (l.visible = i % 2 === 0));
+    wisps.forEach((w, i) => (w.o.visible = i % 2 === 0));
+  } else {
+    renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.4 : 1.75));
+    renderer.shadowMap.enabled = true;
+    sun.castShadow = true;
+    usePostFX = true;
+    bloomPass.strength = 0.24;
+    pond.setReflectiveEnabled(true);
+    petals.count = reduced ? 0 : maxPetals;
+    lanterns.secondaryLights.forEach((l) => (l.visible = true));
+    wisps.forEach((w) => (w.o.visible = true));
+  }
+  composer.setSize(innerWidth, innerHeight);
+  composer.setPixelRatio(renderer.getPixelRatio());
+  bloomPass.setSize(innerWidth, innerHeight);
+  renderer.shadowMap.needsUpdate = true;
+  $('qualityButton').textContent = `quality: ${level}`;
+}
+applyQualityPreset(QUALITY_LEVELS[qualityIndex]);
+
+$('qualityButton').onclick = () => {
+  qualityIndex = (qualityIndex + 1) % QUALITY_LEVELS.length;
+  applyQualityPreset(QUALITY_LEVELS[qualityIndex]);
+};
+
+// ============================================================================
+// AUDIO & AMBIENCE (Synthesized Web Audio Wind + Chimes, Zero 404s)
+// ============================================================================
+let started = false;
+let sound = true;
+let nearest = -1;
+let activeNode = null;
+let yaw = 0;
+let opening = 0;
+let ghostShyTimer = 0;
+const foundDiscoveries = new Set();
+const foundMemories = new Set();
+const customPhotos = new Map();
+
+let audioCtx;
+let ambientGain;
+
+function ensureAudio() {
+  if (!sound) return;
+  audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (!ambientGain) {
+    const bufferSize = audioCtx.sampleRate * 2;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0;
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.997 * b0 + white * 0.029;
+      b1 = 0.985 * b1 + white * 0.032;
+      b2 = 0.950 * b2 + white * 0.048;
+      data[i] = (b0 + b1 + b2) * 0.12;
+    }
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buffer;
+    noise.loop = true;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 380;
+    ambientGain = audioCtx.createGain();
+    ambientGain.gain.value = 0.055;
+    noise.connect(filter);
+    filter.connect(ambientGain);
+    ambientGain.connect(audioCtx.destination);
+    noise.start();
+  }
+}
+
+function chime(notes) {
+  if (!sound) return;
+  ensureAudio();
+  notes.forEach((f, i) => {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    const t = audioCtx.currentTime + i * 0.14;
+    o.type = 'sine';
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.038, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start(t);
+    o.stop(t + 1.5);
+  });
+}
+
+// ============================================================================
+// UI PANELS: MAP, COMPACT JOURNAL, PHOTO VIEWER & INTERACTION
+// ============================================================================
+function updateProgressUI() {
+  $('count').textContent = `${foundDiscoveries.size} / ${ORIGINAL_DISCOVERIES.length} discoveries · ${foundMemories.size} / ${publicMemories.length} memories`;
+  $('journalCount').textContent = `${foundMemories.size}/${publicMemories.length}`;
+  renderMapAndJournal();
+}
+
+function renderMapAndJournal() {
+  const discContainer = $('mapDiscoveries');
+  discContainer.innerHTML = '';
+  ORIGINAL_DISCOVERIES.forEach((d, idx) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'map-item' + (foundDiscoveries.has(d.id) ? ' visited' : '');
+    btn.innerHTML = `<span>${d.chapterNumber} · ${d.name}</span><span class="status-dot">${foundDiscoveries.has(d.id) ? '✿' : '○'}</span>`;
+    btn.onclick = () => teleportToNode(idx);
+    discContainer.appendChild(btn);
+  });
+
+  const memContainer = $('mapMemories');
+  memContainer.innerHTML = '';
+  publicMemories.forEach((m, idx) => {
+    const nodeIdx = ORIGINAL_DISCOVERIES.length + idx;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'map-item' + (foundMemories.has(m.id) ? ' visited' : '');
+    btn.innerHTML = `<span>${String(idx + 1).padStart(2, '0')} · ${m.title}</span><span class="status-dot">${foundMemories.has(m.id) ? '✿' : '○'}</span>`;
+    btn.onclick = () => teleportToNode(nodeIdx);
+    memContainer.appendChild(btn);
+  });
+
+  const jList = $('journalList');
+  jList.innerHTML = '';
+  publicMemories.forEach((m, idx) => {
+    const visited = foundMemories.has(m.id);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'journal-item' + (visited ? ' visited' : '');
+    btn.innerHTML = `<span><strong>${m.code}</strong> · ${m.title}<br><small style="margin:2px 0 0;opacity:.7">${m.date}</small></span><span class="status-dot">${visited ? 'View →' : 'Walk to'}</span>`;
+    btn.onclick = () => {
+      $('journal').hidden = true;
+      $('journalButton').setAttribute('aria-expanded', 'false');
+      teleportToNode(ORIGINAL_DISCOVERIES.length + idx, visited);
+    };
+    jList.appendChild(btn);
+  });
+}
+
+function teleportToNode(nodeIdx, openImmediately = false) {
+  const node = allInteractiveNodes[nodeIdx];
+  if (!node) return;
+  const tz = node.location.z + 1.45;
+  player.position.set(node.location.x, getTerrainHeight(node.location.x, tz), tz);
+  yaw = 0;
+  closeMessage();
+  $('map').hidden = true;
+  $('journal').hidden = true;
+  $('mapButton').setAttribute('aria-expanded', 'false');
+  $('journalButton').setAttribute('aria-expanded', 'false');
+  keys.clear();
+  if (openImmediately) {
+    nearest = nodeIdx;
+    interact();
+  }
+}
+
+function closeMessage() {
+  $('message').hidden = true;
+  activeNode = null;
+  keys.clear();
+}
+
+function openNodePanel(node, nodeIdx) {
+  activeNode = node;
+  if (node.type === 'discovery') {
+    foundDiscoveries.add(node.id);
+    $('chapter').textContent = `${node.chapterNumber} / ${node.name}`;
+    $('memoryDate').textContent = '';
+    $('themeLine').hidden = true;
+    $('title').innerHTML = node.title;
+    $('copy').textContent = node.description;
+    $('photoContainer').hidden = true;
+    $('photoPlaceholder').hidden = true;
+    $('closeMessage').textContent = node.id === 'discovery-04' ? 'one tiny surprise ✿' : 'keep exploring →';
+    if (node.id === 'discovery-01' && lanterns.gate.light) lanterns.gate.light.intensity = 12;
+    if (node.id === 'discovery-03') ghostShyTimer = 2.0;
+    if (node.id === 'discovery-04') opening = 1;
+  } else {
+    foundMemories.add(node.id);
+    $('chapter').textContent = `${node.code} · MEMORY TRAIL`;
+    $('memoryDate').textContent = node.date || '';
+    if (node.theme) {
+      $('themeLine').textContent = node.theme;
+      $('themeLine').hidden = false;
+    } else {
+      $('themeLine').hidden = true;
+    }
+    $('title').textContent = node.title;
+    $('copy').textContent = node.description;
+    $('closeMessage').textContent = 'keep walking →';
+
+    const photoSrc = customPhotos.get(node.id) || node.photo;
+    if (photoSrc) {
+      $('memoryPhoto').src = photoSrc;
+      $('photoContainer').hidden = false;
+      $('photoPlaceholder').hidden = true;
+    } else if (node.photoCaption) {
+      $('photoContainer').hidden = true;
+      $('photoCaptionText').textContent = node.photoCaption;
+      $('photoPlaceholder').hidden = false;
+    } else {
+      $('photoContainer').hidden = true;
+      $('photoPlaceholder').hidden = true;
+    }
+  }
+
+  rings[nodeIdx].material.color.set('#c8e9b9');
+  triggerDiscoveryBurst(node.location.x, getTerrainHeight(node.location.x, node.location.z), node.location.z);
+  updateProgressUI();
+  $('message').hidden = false;
+  $('closeMessage').focus();
+  chime([392 + (nodeIdx % 6) * 45, 523.25, 659.25]);
+  keys.clear();
+}
+
+function interact() {
+  if (nearest < 0 || !$('message').hidden || $('note').open) return;
+  openNodePanel(allInteractiveNodes[nearest], nearest);
+}
+
+$('photoInput').onchange = (e) => {
+  const file = e.target.files?.[0];
+  if (!file || !activeNode) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    customPhotos.set(activeNode.id, reader.result);
+    $('memoryPhoto').src = reader.result;
+    $('photoContainer').hidden = false;
+    $('photoPlaceholder').hidden = true;
+  };
+  reader.readAsDataURL(file);
+};
+
+$('openLightbox').onclick = () => {
+  if (!activeNode) return;
+  const src = customPhotos.get(activeNode.id) || activeNode.photo;
+  if (!src) return;
+  $('lightboxImg').src = src;
+  $('lightboxCaption').textContent = `${activeNode.title} (${activeNode.date || ''})`;
+  $('lightbox').showModal();
+};
+$('closeLightbox').onclick = () => $('lightbox').close();
+
+$('begin').onclick = () => {
+  started = true;
+  document.body.classList.add('playing');
+  $('entry').classList.add('leaving');
+  setTimeout(() => ($('entry').hidden = true), 950);
+  if (sound) ensureAudio();
+  chime([392, 523.25, 659.25]);
+};
+
+$('sound').onclick = () => {
+  sound = !sound;
+  $('sound').textContent = sound ? '♪ sound on' : '♪ sound off';
+  $('sound').setAttribute('aria-pressed', String(sound));
+  if (sound && started) ensureAudio();
+  else audioCtx?.suspend();
+};
+
+$('mapButton').onclick = () => {
+  const open = $('map').hidden;
+  $('map').hidden = !open;
+  $('journal').hidden = true;
+  $('mapButton').setAttribute('aria-expanded', String(open));
+  $('journalButton').setAttribute('aria-expanded', 'false');
+};
+$('closeMap').onclick = () => {
+  $('map').hidden = true;
+  $('mapButton').setAttribute('aria-expanded', 'false');
+};
+
+$('journalButton').onclick = () => {
+  const open = $('journal').hidden;
+  $('journal').hidden = !open;
+  $('map').hidden = true;
+  $('journalButton').setAttribute('aria-expanded', String(open));
+  $('mapButton').setAttribute('aria-expanded', 'false');
+};
+$('closeJournal').onclick = () => {
+  $('journal').hidden = true;
+  $('journalButton').setAttribute('aria-expanded', 'false');
+};
+
+$('home').onclick = $('reset').onclick = () => {
+  player.position.set(0, getTerrainHeight(0, 21.5), 21.5);
+  yaw = 0;
+  closeMessage();
+  $('map').hidden = true;
+  $('journal').hidden = true;
+  $('place').textContent = 'THE LANTERN GATE';
+  keys.clear();
+};
+
+$('closeMessage').onclick = () => {
+  if (activeNode?.id === 'discovery-04') {
+    $('note').showModal();
+    $('closeNote').focus();
+  } else {
+    closeMessage();
+  }
+};
+$('closeNote').onclick = () => {
+  $('note').close();
+  closeMessage();
+};
+$('interact').onclick = interact;
+
+// ============================================================================
+// INPUT, EYE-LEVEL WALK-THROUGH CAMERA & RENDER LOOP
+// ============================================================================
+const keys = new Set();
+const stick = { x: 0, y: 0 };
+const velocity = { x: 0, z: 0 };
+let drag = null;
+let last = performance.now();
+
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'BUTTON' && [' ', 'Enter'].includes(e.key)) return;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+  keys.add(e.code);
+  if (e.code === 'KeyE' && !e.repeat) interact();
+  if (e.code === 'Escape') {
+    closeMessage();
+    $('map').hidden = true;
+    $('journal').hidden = true;
+  }
+  if (e.code === 'KeyM' && !e.repeat) $('mapButton').click();
+  if (e.code === 'KeyJ' && !e.repeat) $('journalButton').click();
+});
+addEventListener('keyup', (e) => keys.delete(e.code));
+addEventListener('blur', () => {
+  keys.clear();
+  stick.x = stick.y = 0;
+});
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  drag = { id: e.pointerId, x: e.clientX };
+  renderer.domElement.setPointerCapture(e.pointerId);
+});
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (drag && drag.id === e.pointerId) {
+    yaw -= (e.clientX - drag.x) * 0.005;
+    drag.x = e.clientX;
+  }
+});
+renderer.domElement.addEventListener('pointerup', () => (drag = null));
+renderer.domElement.addEventListener('pointercancel', () => (drag = null));
+
+const joy = $('joystick');
+function stickMove(e) {
+  const r = joy.getBoundingClientRect();
+  const x = (e.clientX - r.left - r.width / 2) / 34;
+  const y = (e.clientY - r.top - r.height / 2) / 34;
+  const l = Math.max(1, Math.hypot(x, y));
+  stick.x = x / l;
+  stick.y = y / l;
+  joy.firstElementChild.style.transform = `translate(${stick.x * 30}px,${stick.y * 30}px)`;
+}
+joy.onpointerdown = (e) => {
+  joy.setPointerCapture(e.pointerId);
+  stickMove(e);
+};
+joy.onpointermove = (e) => {
+  if (joy.hasPointerCapture(e.pointerId)) stickMove(e);
+};
+joy.onpointerup = joy.onpointercancel = () => {
+  stick.x = stick.y = 0;
+  joy.firstElementChild.style.transform = 'none';
+};
+
+document.addEventListener('visibilitychange', () => {
+  keys.clear();
+  stick.x = stick.y = 0;
+  if (document.hidden) audioCtx?.suspend();
+  else if (started && sound) audioCtx?.resume();
+});
+
+updateProgressUI();
+
+const camTarget = new T.Vector3();
+const look = new T.Vector3();
+// Eye-level composed opening frame looking through the cherry blossom arch down the stone path
+camera.position.set(0, 2.05, 25.8);
+look.set(0, 1.55, 11.0);
+camera.lookAt(look);
+
+let overrideCameraView = null;
+const dummy = new T.Object3D();
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.max(0.001, Math.min((now - last) / 1000, 0.05));
+  last = now;
+  if (document.hidden) return;
+  const t = now / 1000;
+  renderer.info.reset();
+
+  windUniforms.uTime.value = t;
+  windUniforms.uWindAmp.value = reduced ? 0 : 1.0;
+
+  if (started && $('message').hidden && !$('note').open && $('map').hidden && $('journal').hidden) {
+    let inputX = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft')) + stick.x;
+    let inputZ = Number(keys.has('KeyS') || keys.has('ArrowDown')) - Number(keys.has('KeyW') || keys.has('ArrowUp')) + stick.y;
+    const len = Math.max(1, Math.hypot(inputX, inputZ));
+    inputX /= len;
+    inputZ /= len;
+
+    const targetVx = (inputX * Math.cos(yaw) + inputZ * Math.sin(yaw)) * 3.8;
+    const targetVz = (-inputX * Math.sin(yaw) + inputZ * Math.cos(yaw)) * 3.8;
+    const accel = 1 - Math.exp(-dt * 10);
+    velocity.x = T.MathUtils.lerp(velocity.x, targetVx, accel);
+    velocity.z = T.MathUtils.lerp(velocity.z, targetVz, accel);
+
+    const nx = T.MathUtils.clamp(player.position.x + velocity.x * dt, -16, 16);
+    const nz = T.MathUtils.clamp(player.position.z + velocity.z * dt, -37.5, 24);
+    const blocked =
+      colliders.some((c) => Math.hypot(nx - c.x, nz - c.z) < c.r + 0.28) ||
+      pondDistance(nx, nz) < 5.35;
+
+    if (!blocked) {
+      player.position.x = nx;
+      player.position.z = nz;
+      player.position.y = getTerrainHeight(nx, nz);
+    }
+    if (Math.hypot(velocity.x, velocity.z) > 0.18) {
+      player.rotation.y = Math.atan2(velocity.x, velocity.z);
+    }
+  }
+
+  // Nearest interactive station
+  nearest = -1;
+  let minDist = 3.6;
+  allInteractiveNodes.forEach((node, idx) => {
+    const radius = node.interactionRadius || 3.2;
+    const d = Math.hypot(node.location.x - player.position.x, node.location.z - player.position.z);
+    if (d < Math.min(minDist, radius)) {
+      minDist = d;
+      nearest = idx;
+    }
+  });
+
+  $('interact').hidden = !started || nearest < 0 || !$('message').hidden || $('note').open;
+  if (nearest >= 0) {
+    const node = allInteractiveNodes[nearest];
+    $('interact').textContent = `${node.interactLabel}${mobile ? '' : ' · E'}`;
+    $('place').textContent = node.type === 'memory' ? `${node.code} · ${node.title.toUpperCase()}` : node.name;
+  }
+
+  // Eye-level, cinematic third-person follow camera (or test bookmark override)
+  if (overrideCameraView) {
+    camera.position.set(...overrideCameraView.pos);
+    camera.lookAt(...overrideCameraView.look);
+  } else {
+    const camDist = 4.4;
+    const camH = 1.92;
+    camTarget.set(
+      player.position.x + Math.sin(yaw) * camDist,
+      player.position.y + camH,
+      player.position.z + Math.cos(yaw) * camDist
+    );
+    camera.position.lerp(camTarget, reduced ? 1 : 1 - Math.exp(-dt * 5.2));
+    look.set(
+      player.position.x - Math.sin(yaw) * 3.8,
+      player.position.y + 1.38,
+      player.position.z - Math.cos(yaw) * 3.8
+    );
+    camera.lookAt(look);
+  }
+
+  // Player winged orb & shy spirit animations
+  body.position.y = 0.55 + (reduced ? 0 : Math.sin(t * 3.0) * 0.055);
+  aura.position.y = body.position.y;
+  wings.forEach((w, i) => (w.rotation.z = reduced ? 0 : Math.sin(t * 16) * (i ? 1 : -1) * 0.3));
+
+  const distToGhost = Math.hypot(player.position.x - ghost.position.x, player.position.z - ghost.position.z);
+  if (ghostShyTimer > 0) ghostShyTimer = Math.max(0, ghostShyTimer - dt);
+  ghost.position.y = ghostBaseY + 0.78 + (reduced ? 0 : Math.sin(t * 2.0) * 0.11);
+  ghost.rotation.y = Math.sin(t * 0.6) * 0.28;
+  ghost.rotation.z = distToGhost < 3.6 || ghostShyTimer > 0 ? -0.16 : 0;
+  const blink = Math.sin(t * 1.7) > 0.96 ? 0.14 : 1;
+  ghostEyes.forEach((eye) => (eye.scale.y = blink));
+
+  // Pond & bespoke memory prop subtle life
+  pond.update(dt, t);
+  if (animatedProps.cupcake) {
+    const f = 1 + Math.sin(t * 9.5) * 0.12;
+    animatedProps.cupcake.flame.scale.set(0.75, 1.45 * f, 0.75);
+    animatedProps.cupcake.halo.scale.setScalar(0.3 + Math.sin(t * 8) * 0.04);
+  }
+  if (animatedProps.phone) {
+    const pulse = 1 + Math.sin(t * 4.2) * 0.2;
+    animatedProps.phone.ring.scale.set(pulse, pulse, 1);
+    animatedProps.phone.group.rotation.y = Math.sin(t * 11) * 0.035;
+  }
+  if (animatedProps.futureFrame) {
+    animatedProps.futureFrame.position.y = 1.55 + Math.sin(t * 1.5) * 0.07;
+    animatedProps.futureFrame.rotation.y = Math.sin(t * 0.5) * 0.1;
+  }
+
+  // Fireflies & falling blossom petals
+  wisps.forEach((w) => {
+    if (!w.o.visible) return;
+    w.o.position.x = w.x + Math.sin(t * 0.5 + w.phase) * 0.55;
+    w.o.position.y = w.y + Math.sin(t * 1.05 + w.phase) * 0.2;
+    const pulse = w.baseScale * (0.85 + Math.sin(t * 2.2 + w.phase) * 0.2);
+    w.o.scale.setScalar(pulse);
+  });
+
+  if (!reduced && petals.count > 0) {
+    for (let i = 0; i < petals.count; i++) {
+      const p = petalData[i];
+      p.y -= dt * 0.32;
+      if (p.y < 0) p.y = 7.5;
+      dummy.position.set(p.x + Math.sin(t * 0.45 + p.p) * 0.85, p.y, p.z);
+      dummy.rotation.set(t * 0.5 + p.p, t * 0.3, t * 0.65);
+      dummy.scale.setScalar(1);
+      dummy.updateMatrix();
+      petals.setMatrixAt(i, dummy.matrix);
+    }
+    petals.instanceMatrix.needsUpdate = true;
+  }
+
+  if (burstTimer > 0) {
+    burstTimer = Math.max(0, burstTimer - dt);
+    const progress = 1 - burstTimer / 1.5;
+    for (let i = 0; i < burstCount; i++) {
+      const ang = (i / burstCount) * Math.PI * 2;
+      const rad = progress * 1.5;
+      dummy.position.set(
+        burstOrigin.x + Math.cos(ang) * rad,
+        burstOrigin.y + Math.sin(progress * Math.PI) * 1.0 + (i % 3) * 0.14,
+        burstOrigin.z + Math.sin(ang) * rad
+      );
+      dummy.scale.setScalar(Math.max(0.01, (1 - progress) * 1.1));
+      dummy.updateMatrix();
+      burstMesh.setMatrixAt(i, dummy.matrix);
+    }
+    burstMesh.instanceMatrix.needsUpdate = true;
+    if (burstTimer === 0) burstMesh.count = 0;
+  }
+
+  bloomPetals.forEach((p) => {
+    p.rotation.x = T.MathUtils.lerp(p.rotation.x, opening ? -1.2 : -0.32, dt * 2);
+    p.position.z = T.MathUtils.lerp(p.position.z, opening ? 0.5 : 0.24, dt * 2);
+  });
+  shrineCore.position.y = 0.32 + Math.sin(t * 1.8) * 0.04;
+
+  if (usePostFX) composer.render();
+  else renderer.render(scene, camera);
+}
+requestAnimationFrame(frame);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  bloomPass.setSize(innerWidth, innerHeight);
+});
+
+window.setGardenView = (pos, lookAt) => {
+  if (!pos) {
+    overrideCameraView = null;
+    return;
+  }
+  overrideCameraView = { pos, look: lookAt };
+};
+
+window.gardenState = () => {
+  let meshes = 0, instanced = 0, sprites = 0, groupsMulti = 0, totalTris = 0;
+  scene.traverse((o) => {
+    if (o.isInstancedMesh) {
+      instanced++;
+      const idx = o.geometry.index;
+      totalTris += ((idx ? idx.count : o.geometry.attributes.position.count) / 3) * o.count;
+    } else if (o.isMesh) {
+      meshes++;
+      if (o.geometry.groups && o.geometry.groups.length > 1) groupsMulti++;
+      const idx = o.geometry.index;
+      totalTris += (idx ? idx.count : o.geometry.attributes.position.count) / 3;
+    } else if (o.isSprite) {
+      sprites++;
+    }
+  });
+  return {
+    started,
+    quality: QUALITY_LEVELS[qualityIndex],
+    position: player.position.toArray(),
+    cameraPos: camera.position.toArray(),
+    nearest,
+    discoveriesFound: foundDiscoveries.size,
+    memoriesFound: foundMemories.size,
+    totalStations: allInteractiveNodes.length,
+    drawCalls: renderer.info.render.calls,
+    triangles: renderer.info.render.triangles,
+    sceneObjects: { meshes, instanced, sprites, groupsMulti, totalTris: Math.round(totalTris) }
+  };
+};

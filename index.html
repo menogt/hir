@@ -1,3 +1,132 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#17252c"><title>A little place for Hirushi ✦</title><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">  <script type="module" crossorigin src="./assets/index-DI2GWOvE.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-CWUN6Ave.css">
-</head><body><div id="world"></div><div class="vignette"></div><header><span class="brand">A LITTLE PLACE <b>✦</b></span><div><button id="mapButton" aria-expanded="false">garden map</button><button id="sound" aria-pressed="true">♫ sound on</button></div></header><section id="entry"><div><p class="eyebrow">A TINY DETOUR</p><h1>Hey, <em>Hirushi.</em></h1><p>I made you a little place to explore. Nothing serious, promise.</p><button class="primary" id="begin">step into the garden ↗</button><small>Walk with WASD / arrow keys · drag to look around<br>On your phone, use the thumbstick · sound begins when you enter</small></div></section><aside id="map" hidden><h2>Your little garden</h2><p>Choose a place to visit.</p><button data-place="0">01 · The lantern gate</button><button data-place="1">02 · The firefly pond</button><button data-place="2">03 · A little surprise</button><button data-place="3">04 · The blossom grove</button><button id="reset">Return to the entrance</button></aside><section id="message" hidden><p class="eyebrow" id="chapter"></p><h2 id="title"></h2><p id="copy"></p><button id="closeMessage">keep exploring ↗</button></section><button id="interact" hidden></button><div id="location"><span id="place">THE LANTERN GATE</span><small id="count">0 / 4 little moments</small></div><p id="hint">W A S D / arrows to wander · E to interact · drag to look</p><div id="joystick" aria-label="Movement thumbstick"><i></i></div><button id="home" aria-label="Return to entrance">↺</button><dialog id="note"><button id="closeNote" aria-label="Close note">×</button><span>✧</span><h2>That's all, really.</h2><p>I hope this little garden made you smile. I'm happy I got to know you.</p><em>— a little smile, just for you</em></dialog><p id="status" role="status"></p></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1e2230">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='24' font-size='24'>✿</text></svg>">
+  <title>A Little Place for Hirushi — The Memory Garden</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="./assets/index-CkP6G448.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CxW8hEXO.css">
+</head>
+<body>
+  <div id="world" aria-label="Interactive 3D Memory Garden"></div>
+  <div class="vignette"></div>
+
+  <header id="topBar">
+    <span class="brand">A LITTLE PLACE <b>✿</b> <span class="brand-sub">THE MEMORY GARDEN</span></span>
+    <div class="toolbar">
+      <button id="mapButton" type="button" aria-expanded="false">garden map</button>
+      <button id="journalButton" type="button" aria-expanded="false">memories (<span id="journalCount">0/10</span>)</button>
+      <button id="qualityButton" type="button" title="Cycle visual quality preset">quality: high</button>
+      <button id="sound" type="button" aria-pressed="true">♪ sound on</button>
+    </div>
+  </header>
+
+  <section id="entry">
+    <div class="entry-card">
+      <p class="eyebrow">A TINY WALKABLE MEMORY WORLD</p>
+      <h1>Hey, <em>Hirushi.</em></h1>
+      <p class="entry-lead">I made you a quiet little garden to wander through—holding the original four garden moments alongside ten small landmarks from our university days.</p>
+      <button class="primary" id="begin" type="button">step into the garden →</button>
+      <small>
+        Walk with <strong>WASD</strong> or <strong>Arrow keys</strong> · Drag to look around · Press <strong>E</strong> near a landmark<br>
+        On mobile, use the bottom-left thumbstick · Sound begins gently when you enter
+      </small>
+    </div>
+  </section>
+
+  <aside id="map" hidden aria-label="Garden Map and Fast Travel">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">NAVIGATION</p>
+        <h2>Your little garden</h2>
+      </div>
+      <button id="closeMap" type="button" class="icon-btn" aria-label="Close map">×</button>
+    </div>
+    <p class="panel-sub">Walk along the stone path to discover each landmark, or step directly to a place below.</p>
+
+    <div class="map-section">
+      <h3>Original Garden Discoveries</h3>
+      <div id="mapDiscoveries" class="map-list"></div>
+    </div>
+
+    <div class="map-section">
+      <h3>The Memory Trail (01–10)</h3>
+      <div id="mapMemories" class="map-list"></div>
+    </div>
+
+    <button id="reset" type="button" class="secondary-btn">Return to the entrance</button>
+  </aside>
+
+  <aside id="journal" hidden aria-label="Compact Memory Journal">
+    <div class="panel-head">
+      <div>
+        <p class="eyebrow">MEMORY TRAIL LOG</p>
+        <h2>Discovered Moments</h2>
+      </div>
+      <button id="closeJournal" type="button" class="icon-btn" aria-label="Close journal">×</button>
+    </div>
+    <p class="panel-sub">Memories you have visited while walking the trail. Select any entry to revisit its story or attach a personal photo.</p>
+    <div id="journalList" class="journal-list"></div>
+  </aside>
+
+  <section id="message" hidden aria-live="polite">
+    <div class="message-head">
+      <p class="eyebrow" id="chapter"></p>
+      <span id="memoryDate" class="memory-date"></span>
+    </div>
+    <h2 id="title"></h2>
+    <p id="themeLine" class="theme-line" hidden></p>
+    <p id="copy"></p>
+
+    <div id="photoContainer" class="photo-box" hidden>
+      <img id="memoryPhoto" alt="Memory photograph" />
+      <div class="photo-actions">
+        <button id="openLightbox" type="button" class="small-btn">view larger</button>
+      </div>
+    </div>
+
+    <div id="photoPlaceholder" class="photo-placeholder" hidden>
+      <p id="photoCaptionText"></p>
+      <label class="upload-label">
+        <span>+ preview a personal photo here</span>
+        <input type="file" id="photoInput" accept="image/*" hidden>
+      </label>
+    </div>
+
+    <div class="message-footer">
+      <button id="closeMessage" type="button">keep exploring →</button>
+    </div>
+  </section>
+
+  <dialog id="lightbox" aria-label="Photograph Viewer">
+    <button id="closeLightbox" type="button" class="icon-btn" aria-label="Close photo viewer">×</button>
+    <img id="lightboxImg" alt="Enlarged memory photograph" />
+    <p id="lightboxCaption"></p>
+  </dialog>
+
+  <button id="interact" type="button" hidden></button>
+
+  <div id="location">
+    <span id="place">THE LANTERN GATE</span>
+    <small id="count">0 / 4 discoveries · 0 / 10 memories</small>
+  </div>
+
+  <p id="hint">WASD / Arrows to walk · Drag to look · E to interact · M for map</p>
+
+  <div id="joystick" aria-label="Movement thumbstick"><i></i></div>
+  <button id="home" type="button" aria-label="Return to entrance" title="Return to entrance">⌂</button>
+
+  <dialog id="note">
+    <button id="closeNote" type="button" aria-label="Close note">×</button>
+    <span class="note-flower">✿</span>
+    <h2>That's all, really.</h2>
+    <p>I hope this little garden made you smile. Every blossom, lantern, and small landmark along the path is here to hold these real moments quietly.</p>
+    <em>— a little smile, just for you</em>
+  </dialog>
+
+  <p id="status" role="status"></p>
+</body>
+</html>
