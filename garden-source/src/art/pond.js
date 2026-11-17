@@ -199,6 +199,31 @@ export function buildReflectivePond(scene, lib, sunDir) {
   }
   pondGroup.add(floatPetals);
 
+  // Expanding concentric cherry-blossom water ripples across the pond surface (1 batched InstancedMesh)
+  const rippleCount = 12;
+  const rippleGeo = new T.RingGeometry(0.18, 0.215, 24);
+  rippleGeo.rotateX(-Math.PI / 2);
+  const rippleMat = new T.MeshBasicMaterial({
+    color: '#f5dbe5',
+    transparent: true,
+    opacity: 0.28,
+    depthWrite: false
+  });
+  const rippleInst = new T.InstancedMesh(rippleGeo, rippleMat, rippleCount);
+  const ripples = [];
+  for (let i = 0; i < rippleCount; i++) {
+    const a = rng() * Math.PI * 2;
+    const rad = 0.8 + rng() * 3.6;
+    ripples.push({
+      x: -10.6 + Math.cos(a) * rad,
+      z: -2.2 + Math.sin(a) * rad * 1.25,
+      phase: rng(),
+      speed: 0.22 + rng() * 0.14,
+      maxScale: 1.5 + rng() * 1.4
+    });
+  }
+  pondGroup.add(rippleInst);
+
   // Cattails & tall pond reeds clustered around the banks
   const reedBladeGeo = new T.ConeGeometry(0.028, 1.05, 4);
   reedBladeGeo.translate(0, 0.52, 0);
@@ -271,6 +296,16 @@ export function buildReflectivePond(scene, lib, sunDir) {
         textures.waterNormal.offset.x = (t * 0.015) % 1;
         textures.waterNormal.offset.y = (t * 0.011) % 1;
       }
+      ripples.forEach((rp, i) => {
+        const life = (t * rp.speed + rp.phase) % 1;
+        const sc = 0.25 + life * rp.maxScale;
+        dummy.position.set(rp.x, waterY + 0.016, rp.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(sc, 1, sc);
+        dummy.updateMatrix();
+        rippleInst.setMatrixAt(i, dummy.matrix);
+      });
+      rippleInst.instanceMatrix.needsUpdate = true;
     }
   };
 }

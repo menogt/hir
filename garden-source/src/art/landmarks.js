@@ -2,6 +2,147 @@ import * as T from 'three';
 import { PALETTE, addContactShadow, createRng, batchStaticGroup } from './materials.js';
 import { getTerrainHeight } from './terrain.js';
 
+/**
+ * Rounded-corner, softly beveled box geometry (horizontal slab by default, or vertical for screens/phones).
+ */
+function createRoundedBoxGeo(w, h, d, r = 0.014, bevelSize = 0.005, vertical = false) {
+  const spanY = vertical ? h : d;
+  const extrudeDist = vertical ? d : h;
+  const hw = Math.max(0.003, w * 0.5 - bevelSize);
+  const hs = Math.max(0.003, spanY * 0.5 - bevelSize);
+  const rad = Math.min(r, hw * 0.85, hs * 0.85);
+  const shape = new T.Shape();
+  shape.moveTo(-hw + rad, -hs);
+  shape.lineTo(hw - rad, -hs);
+  shape.quadraticCurveTo(hw, -hs, hw, -hs + rad);
+  shape.lineTo(hw, hs - rad);
+  shape.quadraticCurveTo(hw, hs, hw - rad, hs);
+  shape.lineTo(-hw + rad, hs);
+  shape.quadraticCurveTo(-hw, hs, -hw, hs - rad);
+  shape.lineTo(-hw, -hs + rad);
+  shape.quadraticCurveTo(-hw, -hs, -hw + rad, -hs);
+
+  const depth = Math.max(0.002, extrudeDist - bevelSize * 2);
+  const geo = new T.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelThickness: bevelSize,
+    bevelSize,
+    bevelSegments: 1,
+    curveSegments: 2
+  });
+  if (!vertical) geo.rotateX(Math.PI / 2);
+  geo.center();
+  return geo;
+}
+
+/**
+ * Continuous radially-pleated sinusoidal fluted paper cupcake liner (open cup with crinkled rim).
+ */
+function createFlutedWrapperGeo(rBot = 0.068, rTop = 0.098, h = 0.09, flutes = 20) {
+  const radialSegs = flutes * 2;
+  const geo = new T.CylinderGeometry(rTop, rBot, h, radialSegs, 2, true);
+  const pos = geo.attributes.position;
+  const cols = new Float32Array(pos.count * 3);
+  const cCrest = new T.Color('#f4d6c4');
+  const cValley = new T.Color('#c77b5e');
+  const tmp = new T.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const ang = Math.atan2(z, x);
+    const t = (y + h * 0.5) / h; // 0 bottom .. 1 top
+    const wave = Math.sin(ang * flutes);
+    const pleatAmp = (0.002 + t * 0.0068) * wave;
+    const r = Math.hypot(x, z);
+    const scale = r > 0.0001 ? (r + pleatAmp) / r : 1;
+    const rimWave = t > 0.7 ? Math.sin(ang * 3 + 0.5) * 0.003 * t : 0;
+    pos.setXYZ(i, x * scale, y + rimWave, z * scale);
+    tmp.lerpColors(cValley, cCrest, wave * 0.5 + 0.5);
+    cols[i * 3] = tmp.r;
+    cols[i * 3 + 1] = tmp.g;
+    cols[i * 3 + 2] = tmp.b;
+  }
+  geo.setAttribute('color', new T.BufferAttribute(cols, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Softly draped undulating cloth geometry (for folded handkerchief & table linens).
+ */
+function createDrapedClothGeo(w, d, waveAmp = 0.008) {
+  const geo = new T.PlaneGeometry(w, d, 14, 14);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const nx = x / (w * 0.5);
+    const nz = z / (d * 0.5);
+    const wave =
+      Math.sin(nx * Math.PI * 1.4 + 0.3) * Math.cos(nz * Math.PI * 1.1) * waveAmp +
+      Math.cos((nx + nz) * 2.5) * waveAmp * 0.45;
+    // Softly curl corners downward onto surface
+    const edgeDroop = Math.max(0, (nx * nx + nz * nz - 1.1)) * -0.008;
+    pos.setY(i, wave + edgeDroop);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Curved ergonomic wooden chair backrest.
+ */
+function createCurvedChairBackGeo(w = 0.42, h = 0.22, depth = 0.03, curve = 0.045) {
+  const geo = new T.BoxGeometry(w, h, depth, 10, 2, 1);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const t = x / (w * 0.5);
+    pos.setZ(i, pos.getZ(i) + (1 - t * t) * -curve);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function createCeramicMug(color = '#e8dfd1', coffeeColor = '#4f3021') {
+  const g = new T.Group();
+  const mat = new T.MeshStandardMaterial({ color, roughness: 0.32 });
+  const cup = new T.Mesh(
+    new T.LatheGeometry(
+      [
+        new T.Vector2(0.0, 0.0),
+        new T.Vector2(0.036, 0.0),
+        new T.Vector2(0.041, 0.04),
+        new T.Vector2(0.044, 0.086),
+        new T.Vector2(0.039, 0.086),
+        new T.Vector2(0.036, 0.072),
+        new T.Vector2(0.0, 0.072)
+      ],
+      16
+    ),
+    mat
+  );
+  cup.castShadow = true;
+  g.add(cup);
+
+  const handle = new T.Mesh(new T.TorusGeometry(0.024, 0.006, 8, 14, Math.PI), mat);
+  handle.rotation.z = -Math.PI / 2;
+  handle.position.set(0.039, 0.046, 0);
+  g.add(handle);
+
+  const liquid = new T.Mesh(
+    new T.CircleGeometry(0.038, 14),
+    new T.MeshStandardMaterial({ color: coffeeColor, roughness: 0.16, metalness: 0.1 })
+  );
+  liquid.rotation.x = -Math.PI / 2;
+  liquid.position.y = 0.076;
+  g.add(liquid);
+  return g;
+}
+
 function createCupcakeGroup(lib, scale = 1) {
   const { textures, materials } = lib;
   const g = new T.Group();
@@ -641,11 +782,15 @@ export function buildMemoryLandmark(scene, lib, memory) {
       g.add(phoneGroup);
 
       const phoneBody = new T.Mesh(
-        new T.BoxGeometry(0.16, 0.31, 0.02),
-        new T.MeshStandardMaterial({ color: '#242b38', roughness: 0.3, metalness: 0.55 })
+        createRoundedBoxGeo(0.16, 0.31, 0.02, 0.022, 0.004, true),
+        new T.MeshStandardMaterial({ color: '#242b38', roughness: 0.28, metalness: 0.62 })
       );
       phoneBody.castShadow = true;
       phoneGroup.add(phoneBody);
+      // Camera module detail on rear shell
+      const camBump = new T.Mesh(createRoundedBoxGeo(0.048, 0.052, 0.008, 0.01, 0.002, true), materials.darkMetalMat);
+      camBump.position.set(-0.042, 0.11, -0.012);
+      phoneGroup.add(camBump);
 
       const screenMat = new T.MeshStandardMaterial({
         map: textures.phoneLockTex,
@@ -787,39 +932,31 @@ export function buildMemoryLandmark(scene, lib, memory) {
       napkin.rotation.y = 0.18;
       wrapperGroup.add(napkin);
 
-      // Recognizable empty fluted paper cupcake wrapper with 18 pleated ribs & open interior
+      // Continuous sinusoidal fluted paper cupcake wrapper with subtle pleat shading
       const paperOuterMat = new T.MeshStandardMaterial({
-        color: '#d99578',
-        roughness: 0.82,
+        vertexColors: true,
+        roughness: 0.84,
         side: T.DoubleSide
       });
       const paperInnerMat = new T.MeshStandardMaterial({
-        color: '#ecd2be',
-        roughness: 0.85,
+        color: '#f2dfd0',
+        roughness: 0.86,
         side: T.DoubleSide
       });
-      const wrapperBase = new T.Mesh(new T.CylinderGeometry(0.068, 0.068, 0.006, 18), paperInnerMat);
-      wrapperBase.position.y = 0.008;
+      const wrapperBase = new T.Mesh(new T.CylinderGeometry(0.068, 0.068, 0.005, 22), paperInnerMat);
+      wrapperBase.position.y = 0.007;
       wrapperGroup.add(wrapperBase);
 
-      // Fluted pleats around the empty wrapper cup (radial 360° flare using YXZ rotation order)
-      const numPleats = 20;
-      for (let i = 0; i < numPleats; i++) {
-        const ang = (i / numPleats) * Math.PI * 2;
-        const pleat = new T.Mesh(new T.BoxGeometry(0.032, 0.088, 0.005), i % 2 === 0 ? paperOuterMat : paperInnerMat);
-        const r = 0.084;
-        pleat.position.set(Math.cos(ang) * r, 0.044, Math.sin(ang) * r);
-        pleat.rotation.order = 'YXZ';
-        pleat.rotation.y = -ang + Math.PI / 2;
-        pleat.rotation.x = 0.36; // Flared radially outward like a kept cupcake liner
-        pleat.castShadow = true;
-        wrapperGroup.add(pleat);
-      }
+      const flutedCup = new T.Mesh(createFlutedWrapperGeo(0.068, 0.102, 0.092, 24), paperOuterMat);
+      flutedCup.position.y = 0.052;
+      flutedCup.castShadow = flutedCup.receiveShadow = true;
+      wrapperGroup.add(flutedCup);
+
       // Subtle chocolate/sponge crumbs inside the kept wrapper
       const crumbMat = new T.MeshStandardMaterial({ color: '#7a4d32', roughness: 0.9 });
       for (const [cx, cz, cr] of [[-0.02, 0.01, 0.012], [0.022, -0.015, 0.01], [0.005, 0.024, 0.009]]) {
         const crumb = new T.Mesh(new T.DodecahedronGeometry(cr, 0), crumbMat);
-        crumb.position.set(cx, 0.014, cz);
+        crumb.position.set(cx, 0.013, cz);
         wrapperGroup.add(crumb);
       }
 
@@ -927,12 +1064,12 @@ export function buildMemoryLandmark(scene, lib, memory) {
             chair.add(leg);
           }
         }
-        const seatPad = new T.Mesh(new T.BoxGeometry(0.42, 0.045, 0.4), materials.woodMat);
+        const seatPad = new T.Mesh(createRoundedBoxGeo(0.42, 0.046, 0.4, 0.035, 0.008), materials.woodMat);
         seatPad.position.set(0, 0.44, 0);
         seatPad.castShadow = true;
         chair.add(seatPad);
 
-        const backRest = new T.Mesh(new T.BoxGeometry(0.42, 0.24, 0.035), materials.woodMat);
+        const backRest = new T.Mesh(createCurvedChairBackGeo(0.42, 0.24, 0.034, 0.045), materials.woodMat);
         backRest.position.set(0, 0.68, -0.19);
         backRest.rotation.x = -0.1;
         backRest.castShadow = true;
@@ -945,46 +1082,51 @@ export function buildMemoryLandmark(scene, lib, memory) {
         }
       }
 
-      // Hero prop: Softly folded cloth handkerchief resting on the table
+      // Hero prop: Softly undulating draped folded cloth handkerchief resting on the table
       const hankyGroup = new T.Group();
-      hankyGroup.position.set(-0.1, tableH + 0.028, 0.12);
+      hankyGroup.position.set(-0.1, tableH + 0.029, 0.12);
       hankyGroup.rotation.y = 0.28;
       g.add(hankyGroup);
 
-      const hankyClothMat = new T.MeshStandardMaterial({ color: '#f6ecf0', roughness: 0.82 });
-      const hankyBorderMat = new T.MeshStandardMaterial({ color: '#d89ab0', roughness: 0.78 });
+      const hankyClothMat = new T.MeshStandardMaterial({
+        color: '#f8eff3',
+        roughness: 0.86,
+        side: T.DoubleSide
+      });
+      const hankyBorderMat = new T.MeshStandardMaterial({
+        color: '#d89ab0',
+        roughness: 0.82,
+        side: T.DoubleSide
+      });
 
-      // Multi-layered folded fabric square with soft overlapping triangular fold & pastel hem
-      const foldBottom = new T.Mesh(new T.BoxGeometry(0.24, 0.012, 0.22), hankyClothMat);
+      const foldBottom = new T.Mesh(createDrapedClothGeo(0.24, 0.22, 0.005), hankyBorderMat);
       foldBottom.castShadow = true;
       hankyGroup.add(foldBottom);
 
-      const foldTrim = new T.Mesh(new T.BoxGeometry(0.248, 0.008, 0.228), hankyBorderMat);
-      foldTrim.position.y = -0.002;
-      hankyGroup.add(foldTrim);
+      const foldMain = new T.Mesh(createDrapedClothGeo(0.226, 0.206, 0.007), hankyClothMat);
+      foldMain.position.set(0, 0.004, 0);
+      foldMain.castShadow = true;
+      hankyGroup.add(foldMain);
 
-      const foldMid = new T.Mesh(new T.BoxGeometry(0.21, 0.012, 0.18), hankyClothMat);
-      foldMid.position.set(0.012, 0.011, -0.01);
-      foldMid.rotation.y = 0.16;
-      hankyGroup.add(foldMid);
+      const foldTop = new T.Mesh(createDrapedClothGeo(0.195, 0.165, 0.008), hankyClothMat);
+      foldTop.position.set(0.012, 0.012, -0.012);
+      foldTop.rotation.y = 0.14;
+      hankyGroup.add(foldTop);
 
       const foldTopCrease = new T.Mesh(
-        new T.CylinderGeometry(0.022, 0.022, 0.2, 10, 1, false, 0, Math.PI),
+        new T.CylinderGeometry(0.016, 0.018, 0.19, 10, 1, false, 0, Math.PI),
         hankyClothMat
       );
       foldTopCrease.rotation.z = Math.PI / 2;
-      foldTopCrease.rotation.y = 0.12;
-      foldTopCrease.position.set(0, 0.016, 0.04);
+      foldTopCrease.rotation.y = 0.1;
+      foldTopCrease.position.set(0.006, 0.016, 0.055);
       hankyGroup.add(foldTopCrease);
 
-      // Two warm ceramic mugs on the Student Centre table
-      for (const [mx, mz, col] of [[0.18, 0.08, '#e8dfd1'], [-0.18, -0.14, '#d9c5b4']]) {
-        const mug = new T.Mesh(
-          new T.CylinderGeometry(0.045, 0.038, 0.085, 14),
-          new T.MeshStandardMaterial({ color: col, roughness: 0.35 })
-        );
-        mug.position.set(mx, tableH + 0.066, mz);
-        mug.castShadow = true;
+      // Two warm handled ceramic mugs on the Student Centre table
+      for (const [mx, mz, col, ry] of [[0.18, 0.08, '#e8dfd1', -0.4], [-0.18, -0.14, '#d9c5b4', 2.4]]) {
+        const mug = createCeramicMug(col);
+        mug.position.set(mx, tableH + 0.024, mz);
+        mug.rotation.y = ry;
         g.add(mug);
       }
 
@@ -1106,8 +1248,22 @@ export function buildMemoryLandmark(scene, lib, memory) {
       crossH.rotation.y = -0.22;
       g.add(crossH);
 
+      // Brass decorative music-rest lip & expression swell pedal
+      const musicLip = new T.Mesh(new T.BoxGeometry(0.58, 0.024, 0.042), materials.brassMat);
+      musicLip.position.set(0, keybedY + 0.115, -0.145);
+      musicLip.rotation.x = -0.24;
+      g.add(musicLip);
+
+      // Subtle brass choir pipe/grille vertical reeds behind music stand
+      for (let p = -3; p <= 3; p++) {
+        if (Math.abs(p) <= 1) continue;
+        const pipe = new T.Mesh(new T.CylinderGeometry(0.014, 0.014, 0.26 - Math.abs(p) * 0.025, 10), materials.brassMat);
+        pipe.position.set(p * 0.095, keybedY + 0.25, -0.24);
+        g.add(pipe);
+      }
+
       // Wooden organ bench in front of the console
-      const benchTop = new T.Mesh(new T.BoxGeometry(0.68, 0.045, 0.28), materials.woodMat);
+      const benchTop = new T.Mesh(createRoundedBoxGeo(0.68, 0.048, 0.28, 0.022, 0.006), materials.woodMat);
       benchTop.position.set(0, 0.46, 0.36);
       benchTop.castShadow = benchTop.receiveShadow = true;
       g.add(benchTop);
@@ -1150,8 +1306,8 @@ export function buildMemoryLandmark(scene, lib, memory) {
         rowGroup.position.set(0, baseY, rowZ);
         g.add(rowGroup);
 
-        // Lecture desk
-        const deskTop = new T.Mesh(new T.BoxGeometry(0.86, 0.045, 0.38), materials.woodMat);
+        // Beveled lecture desk
+        const deskTop = new T.Mesh(createRoundedBoxGeo(0.86, 0.045, 0.38, 0.018, 0.006), materials.woodMat);
         deskTop.position.set(0, 0.66, -0.12);
         deskTop.castShadow = deskTop.receiveShadow = true;
         rowGroup.add(deskTop);
@@ -1180,12 +1336,12 @@ export function buildMemoryLandmark(scene, lib, memory) {
             chair.add(cLeg);
           }
         }
-        const seat = new T.Mesh(new T.BoxGeometry(0.4, 0.04, 0.36), materials.woodMat);
+        const seat = new T.Mesh(createRoundedBoxGeo(0.4, 0.042, 0.36, 0.032, 0.007), materials.woodMat);
         seat.position.set(0, 0.42, 0);
         seat.castShadow = true;
         chair.add(seat);
 
-        const back = new T.Mesh(new T.BoxGeometry(0.4, 0.22, 0.032), materials.woodMat);
+        const back = new T.Mesh(createCurvedChairBackGeo(0.4, 0.22, 0.032, -0.04), materials.woodMat);
         back.position.set(0, 0.62, 0.16);
         back.rotation.x = 0.08;
         back.castShadow = true;
@@ -1276,16 +1432,30 @@ export function buildMemoryLandmark(scene, lib, memory) {
         g.add(leg);
       }
 
-      // Two open laptops side-by-side working on the web project
+      // Two open beveled laptops side-by-side working on the web project
       for (const [lapX, lapZ, lapYaw] of [[-0.28, 0.12, 0.14], [0.06, 0.1, -0.12]]) {
         const lap = new T.Group();
         lap.position.set(lapX, tableH + 0.026, lapZ);
         lap.rotation.y = lapYaw;
         g.add(lap);
 
-        const base = new T.Mesh(new T.BoxGeometry(0.28, 0.015, 0.2), materials.darkMetalMat);
+        const base = new T.Mesh(createRoundedBoxGeo(0.28, 0.016, 0.2, 0.014, 0.004), materials.darkMetalMat);
         lap.add(base);
-        const lid = new T.Mesh(new T.BoxGeometry(0.28, 0.19, 0.014), materials.darkMetalMat);
+        // Sculpted keyboard keybed recess + trackpad on laptop palmrest
+        const kb = new T.Mesh(
+          new T.BoxGeometry(0.23, 0.004, 0.095),
+          new T.MeshStandardMaterial({ color: '#1b1f28', roughness: 0.5 })
+        );
+        kb.position.set(0, 0.008, -0.02);
+        lap.add(kb);
+        const padTouch = new T.Mesh(
+          new T.BoxGeometry(0.075, 0.003, 0.048),
+          new T.MeshStandardMaterial({ color: '#3b4252', roughness: 0.4 })
+        );
+        padTouch.position.set(0, 0.008, 0.06);
+        lap.add(padTouch);
+
+        const lid = new T.Mesh(createRoundedBoxGeo(0.28, 0.19, 0.014, 0.012, 0.004, true), materials.darkMetalMat);
         lid.position.set(0, 0.095, -0.095);
         lid.rotation.x = -0.22;
         lap.add(lid);
@@ -1494,22 +1664,33 @@ export function buildMemoryLandmark(scene, lib, memory) {
         g.add(divStone);
       }
 
-      // Tiny yellow origami paper boat motif sitting between the two spaces (non-copyrighted nod to IT)
+      // Tiny sculpted multi-fold origami paper boat motif sitting between the two spaces
       const boatGroup = new T.Group();
-      boatGroup.position.set(0, 0.11, 0.36);
+      boatGroup.position.set(0, 0.1, 0.36);
       boatGroup.rotation.y = 0.25;
       g.add(boatGroup);
       const boatMat = new T.MeshStandardMaterial({
         color: '#f2c14e',
         emissive: '#d99b26',
         emissiveIntensity: 0.25,
-        roughness: 0.55
+        roughness: 0.55,
+        side: T.DoubleSide
       });
-      const hull = new T.Mesh(new T.BoxGeometry(0.14, 0.032, 0.065), boatMat);
+      const boatShape = new T.Shape();
+      boatShape.moveTo(-0.08, 0.032);
+      boatShape.lineTo(0.08, 0.032);
+      boatShape.lineTo(0.052, 0);
+      boatShape.lineTo(-0.052, 0);
+      boatShape.closePath();
+      const hull = new T.Mesh(
+        new T.ExtrudeGeometry(boatShape, { depth: 0.052, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.003, bevelSegments: 1 }),
+        boatMat
+      );
+      hull.position.set(0, 0, -0.026);
       boatGroup.add(hull);
-      const sail = new T.Mesh(new T.ConeGeometry(0.045, 0.075, 4), boatMat);
-      sail.position.y = 0.05;
-      sail.rotation.y = Math.PI / 4;
+      const sail = new T.Mesh(new T.ConeGeometry(0.044, 0.068, 3), boatMat);
+      sail.position.y = 0.056;
+      sail.scale.set(1.2, 1, 0.45);
       boatGroup.add(sail);
 
       // --- LEFT SPACE (Hirushi's Home Corner: Television + Media Cabinet + Cushion + Phone) ---

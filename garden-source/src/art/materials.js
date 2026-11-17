@@ -190,6 +190,14 @@ export function createMaterialLibrary(renderer) {
   });
   applyWindSway(shrubCardMat, { heightStart: 0.12, amp: 0.04, speed: 1.5 });
 
+  const foliage3DMat = new T.MeshStandardMaterial({
+    vertexColors: true,
+    side: T.DoubleSide,
+    roughness: 0.76,
+    metalness: 0.02
+  });
+  applyWindSway(foliage3DMat, { heightStart: 0.04, amp: 0.068, speed: 1.85 });
+
   const lilyPadMat = new T.MeshStandardMaterial({
     map: lilyPadTex,
     alphaTest: 0.4,
@@ -594,6 +602,7 @@ export function createMaterialLibrary(renderer) {
       blossomCardMat,
       grassCardMat,
       shrubCardMat,
+      foliage3DMat,
       lilyPadMat,
       linenMat,
       ceramicMat,
@@ -637,8 +646,9 @@ export function batchStaticGroup(root, skipObjects = []) {
     const relMat = new T.Matrix4().multiplyMatrices(invRoot, obj.matrixWorld);
     let g = obj.geometry.index ? obj.geometry.toNonIndexed() : obj.geometry.clone();
     // Normalize attribute set across mixed primitives so mergeGeometries never fails
+    const keepColor = Boolean(obj.material.vertexColors);
     for (const key of Object.keys(g.attributes)) {
-      if (key !== 'position' && key !== 'normal' && key !== 'uv') {
+      if (key !== 'position' && key !== 'normal' && key !== 'uv' && !(keepColor && key === 'color')) {
         g.deleteAttribute(key);
       }
     }

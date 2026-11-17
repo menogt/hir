@@ -203,7 +203,7 @@ small {
   z-index: 8;
   right: 24px;
   top: 76px;
-  padding: 22px;
+  padding: 0 22px 22px;
   width: min(350px, 90vw);
   max-height: calc(100vh - 140px);
   overflow-y: auto;
@@ -212,9 +212,29 @@ small {
   backdrop-filter: blur(8px);
   border-radius: 14px;
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 217, 160, 0.35) transparent;
+}
+
+#map::-webkit-scrollbar, #journal::-webkit-scrollbar {
+  width: 6px;
+}
+#map::-webkit-scrollbar-track, #journal::-webkit-scrollbar-track {
+  background: transparent;
+}
+#map::-webkit-scrollbar-thumb, #journal::-webkit-scrollbar-thumb {
+  background: rgba(255, 217, 160, 0.32);
+  border-radius: 3px;
 }
 
 .panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 18px 0 10px;
+  margin-bottom: 2px;
+  background: rgba(24, 31, 44, 0.96);
+  border-bottom: 1px solid rgba(242, 229, 201, 0.12);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -425,7 +445,7 @@ small {
 }
 
 .scene-focus-bar .small-btn.active {
-  border-color: var(--gold);
+  border-color: var(--lantern-warm);
   background: rgba(255, 216, 155, 0.22);
 }
 
@@ -620,17 +640,73 @@ body:not(.playing) #home {
   display: none !important;
 }
 
+.text-link-btn {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: rgba(242, 229, 201, 0.56);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.text-link-btn:hover {
+  background: transparent;
+  color: var(--lantern-warm);
+}
+
+@media (max-width: 1020px) {
+  .brand-sub {
+    display: none;
+  }
+  .toolbar {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .toolbar button {
+    font-size: 11px;
+    padding: 7px 11px;
+    white-space: nowrap;
+  }
+  #hint {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  header {
+    padding: 10px 12px;
+  }
+  .toolbar {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  #map, #journal {
+    top: 96px !important;
+    max-height: calc(100vh - 170px) !important;
+  }
+}
+
+@media (pointer: coarse) {
+  #joystick {
+    display: block;
+  }
+  #hint {
+    display: none;
+  }
+}
+
 @media (max-width: 720px) {
   header {
     padding: 14px 14px;
   }
-  .brand-sub {
-    display: none;
-  }
   .toolbar button {
     font-size: 10.5px;
-    padding: 7px 11px;
-    min-height: 36px;
+    padding: 7px 10px;
+    min-height: 34px;
   }
   #joystick {
     display: block;
@@ -648,8 +724,9 @@ body:not(.playing) #home {
   }
   #map, #journal {
     right: 12px;
-    top: 62px;
+    top: 64px;
     width: calc(100vw - 24px);
+    max-height: calc(100vh - 144px);
   }
   #message {
     bottom: 74px;

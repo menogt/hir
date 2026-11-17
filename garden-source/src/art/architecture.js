@@ -2,6 +2,25 @@ import * as T from 'three';
 import { PALETTE, addContactShadow, createRng, batchStaticGroup } from './materials.js';
 import { getTerrainHeight, pathX } from './terrain.js';
 
+/**
+ * Builds a gracefully swept Japanese pagoda roof with upturned eaves & concave tile slope.
+ */
+function createSweptRoofGeometry(radius, height, sides = 4, segs = 4, upturn = 0.24) {
+  const geo = new T.ConeGeometry(radius, height, sides, segs, false);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const r = Math.hypot(x, z) / Math.max(0.001, radius);
+    // Concave swoop + delicate upward flare at outer corners
+    const swoop = -Math.sin(r * Math.PI * 0.65) * height * 0.14 + Math.pow(r, 2.2) * height * upturn;
+    pos.setXYZ(i, x * (1 + r * 0.08), y + swoop, z * (1 + r * 0.08));
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
 export function buildLantern(scene, lib, x, z, { scale = 1, hasLight = false, lightIntensity = 2.6, lightDist = 7.5, yOverride = null } = {}) {
   const { textures, materials } = lib;
   const y = yOverride !== null ? yOverride : getTerrainHeight(x, z);
@@ -59,20 +78,20 @@ export function buildLantern(scene, lib, x, z, { scale = 1, hasLight = false, li
     g.add(vMuntin);
   }
 
-  // Overhanging gabled / hipped timber & tile roof + finial
-  const eave = new T.Mesh(new T.BoxGeometry(0.66, 0.05, 0.66), materials.woodDarkMat);
+  // Overhanging gabled / swept Japanese tile roof + lotus finial
+  const eave = new T.Mesh(new T.BoxGeometry(0.64, 0.045, 0.64), materials.woodDarkMat);
   eave.position.y = 1.35;
   eave.castShadow = true;
   g.add(eave);
 
-  const roof = new T.Mesh(new T.ConeGeometry(0.54, 0.28, 4), materials.roofTileMat);
-  roof.position.y = 1.51;
+  const roof = new T.Mesh(createSweptRoofGeometry(0.56, 0.3, 4, 4, 0.28), materials.roofTileMat);
+  roof.position.y = 1.52;
   roof.rotation.y = Math.PI / 4;
   roof.castShadow = true;
   g.add(roof);
 
-  const finial = new T.Mesh(new T.SphereGeometry(0.055, 8, 8), materials.woodMat);
-  finial.position.y = 1.66;
+  const finial = new T.Mesh(new T.SphereGeometry(0.055, 10, 8), materials.brassMat);
+  finial.position.y = 1.67;
   g.add(finial);
 
   addContactShadow(g, materials.contactShadowMat, 0.62, 0.015);
@@ -140,8 +159,8 @@ export function buildStoneYukimiLantern(scene, lib, x, z) {
     g.add(pillar);
   }
 
-  const kasa = new T.Mesh(new T.ConeGeometry(0.68, 0.34, 6), materials.stoneMat);
-  kasa.position.y = 1.28;
+  const kasa = new T.Mesh(createSweptRoofGeometry(0.7, 0.36, 6, 4, 0.22), materials.stoneMat);
+  kasa.position.y = 1.29;
   kasa.castShadow = true;
   g.add(kasa);
 
@@ -255,16 +274,16 @@ export function buildGardenPavilion(scene, lib, x = -4.2, z = -14.2) {
     g.add(bal);
   }
 
-  // 3. Curved Japanese/storybook tiled pagoda roof (two-tier eave + ridge beam)
-  const lowerEave = new T.Mesh(new T.ConeGeometry(3.45, 0.95, 4), materials.roofTileMat);
-  lowerEave.position.y = 3.45;
+  // 3. Curved Japanese/storybook tiled pagoda roof (two-tier swept eaves)
+  const lowerEave = new T.Mesh(createSweptRoofGeometry(3.52, 0.96, 4, 5, 0.32), materials.roofTileMat);
+  lowerEave.position.y = 3.46;
   lowerEave.rotation.y = Math.PI / 4;
   lowerEave.scale.set(1.06, 1, 1.02);
   lowerEave.castShadow = lowerEave.receiveShadow = true;
   g.add(lowerEave);
 
-  const upperTier = new T.Mesh(new T.ConeGeometry(2.15, 0.82, 4), materials.roofTileMat);
-  upperTier.position.y = 4.02;
+  const upperTier = new T.Mesh(createSweptRoofGeometry(2.18, 0.84, 4, 5, 0.34), materials.roofTileMat);
+  upperTier.position.y = 4.04;
   upperTier.rotation.y = Math.PI / 4;
   upperTier.castShadow = true;
   g.add(upperTier);

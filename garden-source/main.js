@@ -15,10 +15,11 @@ import {
   buildBlossomShrine,
   buildPlayerOrb
 } from './src/art/landmarks.js';
+import { loadExternalGardenModels } from './src/art/externalAssets.js';
 import './style.css';
 
 const $ = (id) => document.getElementById(id);
-const mobile = innerWidth < 720;
+const mobile = innerWidth < 720 || matchMedia('(pointer: coarse)').matches;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ============================================================================
@@ -125,9 +126,15 @@ const lanterns = placeGardenLanterns(scene, lib);
 const pond = buildReflectivePond(scene, lib, sun.position);
 
 const animatedProps = {};
-publicMemories.forEach((m) => {
+const landmarkHitTargets = [];
+publicMemories.forEach((m, idx) => {
   const res = buildMemoryLandmark(scene, lib, m);
   Object.assign(animatedProps, res.animated);
+  landmarkHitTargets.push({ nodeIdx: ORIGINAL_DISCOVERIES.length + idx, group: res.group });
+});
+
+loadExternalGardenModels(scene, landmarkCoords).catch((err) => {
+  console.warn('Optional 3D models skipped:', err);
 });
 
 const { player, body, wings, aura } = buildPlayerOrb(scene, lib);
@@ -292,9 +299,42 @@ let activeNode = null;
 let yaw = 0;
 let opening = 0;
 let ghostShyTimer = 0;
+const PROGRESS_KEY = 'hir_garden_progress_v1';
 const foundDiscoveries = new Set();
 const foundMemories = new Set();
 const customPhotos = new Map();
+
+function loadSavedProgress() {
+  try {
+    const raw = localStorage.getItem(PROGRESS_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    saved.discoveries?.forEach((id) => foundDiscoveries.add(id));
+    saved.memories?.forEach((id) => foundMemories.add(id));
+  } catch {
+    // ignore storage access issues
+  }
+}
+
+function saveProgress() {
+  try {
+    localStorage.setItem(
+      PROGRESS_KEY,
+      JSON.stringify({
+        discoveries: [...foundDiscoveries],
+        memories: [...foundMemories]
+      })
+    );
+  } catch {
+    // ignore storage access issues
+  }
+}
+
+loadSavedProgress();
+allInteractiveNodes.forEach((node, idx) => {
+  const visited = node.type === 'discovery' ? foundDiscoveries.has(node.id) : foundMemories.has(node.id);
+  if (visited && rings[idx]) rings[idx].material.color.set('#c8e9b9');
+});
 
 let audioCtx;
 let ambientGain;
@@ -346,6 +386,35 @@ function chime(notes) {
     g.connect(audioCtx.destination);
     o.start(t);
     o.stop(t + 1.5);
+  });
+}
+
+function playOrganChord(notes) {
+  if (!sound) return;
+  ensureAudio();
+  notes.forEach((f, i) => {
+    const o1 = audioCtx.createOscillator();
+    const o2 = audioCtx.createOscillator();
+    const filter = audioCtx.createBiquadFilter();
+    const g = audioCtx.createGain();
+    const t = audioCtx.currentTime + i * 0.08;
+    o1.type = 'triangle';
+    o2.type = 'sine';
+    o1.frequency.value = f;
+    o2.frequency.value = f * 2;
+    filter.type = 'lowpass';
+    filter.frequency.value = 1100;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.032, t + 0.14);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+    o1.connect(filter);
+    o2.connect(filter);
+    filter.connect(g);
+    g.connect(audioCtx.destination);
+    o1.start(t);
+    o2.start(t);
+    o1.stop(t + 2.3);
+    o2.stop(t + 2.3);
   });
 }
 
@@ -507,10 +576,15 @@ function openNodePanel(node, nodeIdx) {
 
   rings[nodeIdx].material.color.set('#c8e9b9');
   triggerDiscoveryBurst(node.location.x, getTerrainHeight(node.location.x, node.location.z), node.location.z);
+  saveProgress();
   updateProgressUI();
   $('message').hidden = false;
   $('closeMessage').focus();
-  chime([392 + (nodeIdx % 6) * 45, 523.25, 659.25]);
+  if (node.id === 'memory-07') {
+    playOrganChord([261.63, 329.63, 392.0, 523.25]);
+  } else {
+    chime([392 + (nodeIdx % 6) * 45, 523.25, 659.25]);
+  }
   keys.clear();
 }
 
@@ -635,8 +709,19 @@ addEventListener('blur', () => {
   stick.x = stick.y = 0;
 });
 
+const raycaster = new T.Raycaster();
+const tapNdc = new T.Vector2();
+
 renderer.domElement.addEventListener('pointerdown', (e) => {
-  drag = { id: e.pointerId, x: e.clientX };
+  // Click/tap outside open Map or Journal drawer dismisses it
+  if (!$('map').hidden || !$('journal').hidden) {
+    $('map').hidden = true;
+    $('journal').hidden = true;
+    $('mapButton').setAttribute('aria-expanded', 'false');
+    $('journalButton').setAttribute('aria-expanded', 'false');
+    return;
+  }
+  drag = { id: e.pointerId, x: e.clientX, startX: e.clientX, startY: e.clientY };
   renderer.domElement.setPointerCapture(e.pointerId);
 });
 renderer.domElement.addEventListener('pointermove', (e) => {
@@ -645,8 +730,41 @@ renderer.domElement.addEventListener('pointermove', (e) => {
     drag.x = e.clientX;
   }
 });
-renderer.domElement.addEventListener('pointerup', () => (drag = null));
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!drag || drag.id !== e.pointerId) {
+    drag = null;
+    return;
+  }
+  const moved = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY);
+  drag = null;
+  if (moved < 6 && started && $('message').hidden && !$('note').open && $('map').hidden && $('journal').hidden) {
+    tapNdc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+    raycaster.setFromCamera(tapNdc, camera);
+    for (const target of landmarkHitTargets) {
+      if (raycaster.intersectObject(target.group, true).length > 0) {
+        const node = allInteractiveNodes[target.nodeIdx];
+        const dist = Math.hypot(node.location.x - player.position.x, node.location.z - player.position.z);
+        if (dist <= (node.interactionRadius || 3.2) + 1.4) {
+          openNodePanel(node, target.nodeIdx);
+          return;
+        }
+      }
+    }
+    if (nearest >= 0) interact();
+  }
+});
 renderer.domElement.addEventListener('pointercancel', () => (drag = null));
+
+$('resetProgress')?.addEventListener('click', () => {
+  foundDiscoveries.clear();
+  foundMemories.clear();
+  saveProgress();
+  rings.forEach((r, idx) => {
+    const isMem = allInteractiveNodes[idx]?.type === 'memory';
+    r.material.color.set(isMem ? PALETTE.blossomMid : PALETTE.lanternGlow);
+  });
+  updateProgressUI();
+});
 
 const joy = $('joystick');
 function stickMove(e) {
@@ -748,11 +866,16 @@ function frame(now) {
     $('place').textContent = node.type === 'memory' ? `${node.code} · ${node.title.toUpperCase()}` : node.name;
   }
 
-  // Eye-level, cinematic third-person follow camera (or test bookmark / detail override)
-  const activeViewOverride = overrideCameraView || detailCameraView;
-  if (activeViewOverride) {
-    camera.position.set(...activeViewOverride.pos);
-    camera.lookAt(...activeViewOverride.look);
+  // Eye-level, cinematic third-person follow camera (or test bookmark / smooth detail focus)
+  if (overrideCameraView) {
+    camera.position.set(...overrideCameraView.pos);
+    camera.lookAt(...overrideCameraView.look);
+  } else if (detailCameraView) {
+    camTarget.set(...detailCameraView.pos);
+    const dLook = new T.Vector3(...detailCameraView.look);
+    camera.position.lerp(camTarget, reduced ? 1 : 1 - Math.exp(-dt * 6.5));
+    look.lerp(dLook, reduced ? 1 : 1 - Math.exp(-dt * 6.5));
+    camera.lookAt(look);
   } else {
     const camDist = 4.4;
     const camH = 1.92;

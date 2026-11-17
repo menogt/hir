@@ -92,6 +92,244 @@ function createBoulderGeometry(rng, detail = 2) {
   return geo;
 }
 
+function buildBladeGeometry({ baseW = 0.045, height = 0.45, bend = 0.14, yaw = 0, lean = 0.05, ox = 0, oz = 0, segs = 3, colBase, colTip }) {
+  const positions = [];
+  const colors = [];
+  const indices = [];
+  const cosY = Math.cos(yaw);
+  const sinY = Math.sin(yaw);
+
+  for (let s = 0; s <= segs; s++) {
+    const t = s / segs;
+    const w = baseW * (1 - t * 0.92);
+    const y = t * height;
+    const fwd = lean * t + bend * t * t;
+    const c = colBase.clone().lerp(colTip, t);
+
+    for (const side of [-1, 1]) {
+      const lx = side * w;
+      const lz = fwd;
+      const wx = ox + lx * cosY - lz * sinY;
+      const wz = oz + lx * sinY + lz * cosY;
+      positions.push(wx, y, wz);
+      colors.push(c.r, c.g, c.b);
+    }
+    if (s < segs) {
+      const row = s * 2;
+      indices.push(row, row + 1, row + 2, row + 1, row + 3, row + 2);
+    }
+  }
+  const g = new T.BufferGeometry();
+  g.setAttribute('position', new T.Float32BufferAttribute(positions, 3));
+  g.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
+  g.setIndex(indices);
+  g.computeVertexNormals();
+  return g;
+}
+
+function mergeColorGeometries(geos) {
+  const totalVerts = geos.reduce((acc, g) => acc + g.attributes.position.count, 0);
+  const pos = new Float32Array(totalVerts * 3);
+  const norm = new Float32Array(totalVerts * 3);
+  const col = new Float32Array(totalVerts * 3);
+  const indices = [];
+  let vOffset = 0;
+  for (const g of geos) {
+    const p = g.attributes.position;
+    if (!g.attributes.normal) g.computeVertexNormals();
+    const n = g.attributes.normal;
+    const c = g.attributes.color;
+    pos.set(p.array, vOffset * 3);
+    norm.set(n.array, vOffset * 3);
+    if (c) col.set(c.array, vOffset * 3);
+    const idx = g.index;
+    if (idx) {
+      for (let i = 0; i < idx.count; i++) indices.push(idx.getX(i) + vOffset);
+    } else {
+      for (let i = 0; i < p.count; i++) indices.push(i + vOffset);
+    }
+    vOffset += p.count;
+    g.dispose();
+  }
+  const merged = new T.BufferGeometry();
+  merged.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+  merged.setAttribute('normal', new T.Float32BufferAttribute(norm, 3));
+  merged.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+  merged.setIndex(indices);
+  return merged;
+}
+
+function create3DGrassTuftGeometry(rng) {
+  const parts = [];
+  const cBase = new T.Color('#425937');
+  const cTip = new T.Color('#86a66c');
+  for (let i = 0; i < 8; i++) {
+    const yaw = (i / 8) * Math.PI * 2 + (rng() - 0.5) * 0.45;
+    const rad = 0.04 + rng() * 0.14;
+    parts.push(
+      buildBladeGeometry({
+        baseW: 0.036 + rng() * 0.016,
+        height: 0.36 + rng() * 0.24,
+        bend: 0.1 + rng() * 0.14,
+        yaw,
+        lean: 0.04 + rng() * 0.08,
+        ox: Math.cos(yaw) * rad,
+        oz: Math.sin(yaw) * rad,
+        segs: 2,
+        colBase: cBase,
+        colTip: cTip
+      })
+    );
+  }
+  return mergeColorGeometries(parts);
+}
+
+function create3DDianthusTuftGeometry(rng) {
+  const parts = [];
+  const cLeafBase = new T.Color('#3b5946');
+  const cLeafTip = new T.Color('#7ca382');
+  const cPetalOuter = new T.Color('#f4c4d8');
+  const cPetalCenter = new T.Color('#a33860');
+
+  // Low glaucous grass cushion
+  for (let i = 0; i < 8; i++) {
+    const yaw = (i / 8) * Math.PI * 2 + (rng() - 0.5) * 0.35;
+    const rad = 0.03 + rng() * 0.12;
+    parts.push(
+      buildBladeGeometry({
+        baseW: 0.028 + rng() * 0.01,
+        height: 0.22 + rng() * 0.14,
+        bend: 0.1 + rng() * 0.1,
+        yaw,
+        lean: 0.05 + rng() * 0.06,
+        ox: Math.cos(yaw) * rad,
+        oz: Math.sin(yaw) * rad,
+        segs: 1,
+        colBase: cLeafBase,
+        colTip: cLeafTip
+      })
+    );
+  }
+
+  // Slender flowering stems topped by 5-petal cupped pink Dianthus blooms
+  const stemCount = 4;
+  for (let f = 0; f < stemCount; f++) {
+    const ang = (f / stemCount) * Math.PI * 2 + rng() * 0.5;
+    const spread = 0.08 + rng() * 0.11;
+    const h = 0.32 + rng() * 0.16;
+    const fx = Math.cos(ang) * spread;
+    const fz = Math.sin(ang) * spread;
+
+    // Slim stem
+    parts.push(
+      buildBladeGeometry({
+        baseW: 0.011,
+        height: h,
+        bend: spread * 0.5,
+        yaw: ang,
+        lean: spread * 0.4,
+        ox: fx * 0.25,
+        oz: fz * 0.25,
+        segs: 1,
+        colBase: cLeafBase,
+        colTip: cLeafTip
+      })
+    );
+
+    // 5-petal Dianthus blossom head at stem tip
+    const tipZ = spread * 0.9;
+    const cosA = Math.cos(ang);
+    const sinA = Math.sin(ang);
+    const flowerX = fx * 0.25 - tipZ * sinA;
+    const flowerZ = fz * 0.25 + tipZ * cosA;
+    const flowerY = h + 0.01;
+
+    const petalPos = [];
+    const petalCols = [];
+    const petalIdx = [];
+    const petals = 5;
+    for (let p = 0; p < petals; p++) {
+      const pa = (p / petals) * Math.PI * 2 + f * 0.4;
+      const rIn = 0.01;
+      const rOut = 0.056 + (p % 2) * 0.008;
+      const wHalf = 0.026;
+      const pCos = Math.cos(pa);
+      const pSin = Math.sin(pa);
+
+      const x0 = flowerX + pCos * rIn;
+      const z0 = flowerZ + pSin * rIn;
+      const x1 = flowerX + pCos * rOut - pSin * wHalf;
+      const z1 = flowerZ + pSin * rOut + pCos * wHalf;
+      const x2 = flowerX + pCos * rOut + pSin * wHalf;
+      const z2 = flowerZ + pSin * rOut - pCos * wHalf;
+      const yCup = flowerY + 0.014;
+
+      const base = p * 3;
+      petalPos.push(x0, flowerY, z0, x1, yCup, z1, x2, yCup, z2);
+      petalCols.push(
+        cPetalCenter.r, cPetalCenter.g, cPetalCenter.b,
+        cPetalOuter.r, cPetalOuter.g, cPetalOuter.b,
+        cPetalOuter.r, cPetalOuter.g, cPetalOuter.b
+      );
+      petalIdx.push(base, base + 1, base + 2);
+    }
+    const fg = new T.BufferGeometry();
+    fg.setAttribute('position', new T.Float32BufferAttribute(petalPos, 3));
+    fg.setAttribute('color', new T.Float32BufferAttribute(petalCols, 3));
+    fg.setIndex(petalIdx);
+    fg.computeVertexNormals();
+    parts.push(fg);
+  }
+
+  return mergeColorGeometries(parts);
+}
+
+function create3DShrubGeometry(rng) {
+  const parts = [];
+  const cLeafDark = new T.Color('#344d38');
+  const cLeafMid = new T.Color('#4f6d4f');
+  const cBloomPink = new T.Color('#e29eb8');
+  const cBloomLav = new T.Color('#d2b0d4');
+
+  const pushColored = (geo, colA, colB) => {
+    const pos = geo.attributes.position;
+    const cols = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i++) {
+      const yNorm = T.MathUtils.clamp((pos.getY(i) + 0.2) * 1.4, 0, 1);
+      const c = colA.clone().lerp(colB, yNorm);
+      cols[i * 3] = c.r;
+      cols[i * 3 + 1] = c.g;
+      cols[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new T.BufferAttribute(cols, 3));
+    const nonIdx = geo.index ? geo.toNonIndexed() : geo;
+    if (nonIdx !== geo) geo.dispose();
+    parts.push(nonIdx);
+  };
+
+  // Overlapping sculpted leafy mounds (low-poly detail 0 -> 20 tris each)
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 3) * Math.PI * 2 + rng() * 0.4;
+    const r = i === 0 ? 0 : 0.22 + rng() * 0.08;
+    const rad = i === 0 ? 0.36 : 0.25 + rng() * 0.06;
+    const g = new T.IcosahedronGeometry(rad, 0);
+    g.scale(1.15, 0.84, 1.1);
+    g.translate(Math.cos(a) * r, 0.2 + (i === 0 ? 0.12 : 0), Math.sin(a) * r);
+    pushColored(g, cLeafDark, cLeafMid);
+  }
+
+  // Sculpted hydrangea blossom clusters nestled on top
+  for (let b = 0; b < 3; b++) {
+    const a = (b / 3) * Math.PI * 2 + 0.35;
+    const r = 0.15 + (b % 2) * 0.09;
+    const bGeo = new T.IcosahedronGeometry(0.12 + (b % 2) * 0.025, 0);
+    bGeo.translate(Math.cos(a) * r, 0.42 + (b % 2) * 0.06, Math.sin(a) * r);
+    pushColored(bGeo, b % 2 === 0 ? cBloomPink : cBloomLav, new T.Color('#f7dce6'));
+  }
+
+  return mergeColorGeometries(parts);
+}
+
 function createCrossedTuftGeometry(width = 0.85, height = 0.75) {
   const g1 = new T.PlaneGeometry(width, height, 1, 2);
   g1.translate(0, height * 0.5, 0);
@@ -312,57 +550,74 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
     scene.add(im);
   });
 
-  // 4. Dense instanced grass & wildflower border tufts (meets stones & pond shore!)
+  // 4. Sculpted 3D Grass Blades & Pink Dianthus Flower Grass Tufts (no flat cards!)
   const grassPositions = [];
-  for (let i = 0; i < 1650; i++) {
+  const dianthusPositions = [];
+  for (let i = 0; i < 920; i++) {
     const z = 24 - rng() * 61;
     const side = rng() > 0.5 ? 1 : -1;
-    // Bias heavily toward path borders (1.45..4.2m from path center) and spread outward
     const borderBias = rng() < 0.65 ? 1.48 + rng() * 2.4 : 3.2 + rng() * 11.5;
     const x = pathX(z) + side * borderBias;
     if (pondDistance(x, z) < 5.3) continue;
     if (Math.hypot(x + 4.2, z + 14.2) < 3.4) continue;
     if (nearLandmark(x, z, 1.15)) continue;
     const y = getTerrainHeight(x, z);
-    grassPositions.push({
+    const entry = {
       x,
-      y: y - 0.03,
+      y: y - 0.025,
       z,
-      s: 0.52 + rng() * 0.52,
+      s: 0.72 + rng() * 0.58,
       rot: rng() * Math.PI * 2,
-      tint: 0.8 + rng() * 0.3
-    });
+      tint: 0.82 + rng() * 0.28
+    };
+    if (borderBias < 3.4 && i % 4 === 0) dianthusPositions.push(entry);
+    else grassPositions.push(entry);
   }
-  // Extra ring of lush grass & wildflowers right around pond bank
-  for (let i = 0; i < 340; i++) {
+  // Extra ring of lush grass & pink Dianthus flowers right along the pond shoreline
+  for (let i = 0; i < 220; i++) {
     const a = rng() * Math.PI * 2;
-    const rad = 5.45 + rng() * 1.45;
+    const rad = 5.42 + rng() * 1.38;
     const x = -10.6 + Math.cos(a) * rad * (1 + Math.sin(a * 2 + 0.6) * 0.11);
     const z = -2.2 + Math.sin(a) * rad * 1.32 * (1 + Math.cos(a * 3 - 0.4) * 0.07);
     if (Math.abs(x - pathX(z)) < 1.35) continue;
     const y = getTerrainHeight(x, z);
-    grassPositions.push({
+    const entry = {
       x,
-      y: y - 0.04,
+      y: y - 0.03,
       z,
-      s: 0.78 + rng() * 0.8,
+      s: 0.78 + rng() * 0.65,
       rot: rng() * Math.PI * 2,
-      tint: 0.82 + rng() * 0.28
-    });
+      tint: 0.85 + rng() * 0.24
+    };
+    if (i % 3 === 0) dianthusPositions.push(entry);
+    else grassPositions.push(entry);
   }
 
-  const grassGeo = createCrossedTuftGeometry(0.75, 0.64);
-  const grassInst = new T.InstancedMesh(grassGeo, materials.grassCardMat, grassPositions.length);
-  grassInst.receiveShadow = true;
+  const grassGeo = create3DGrassTuftGeometry(rng);
+  const grassInst = new T.InstancedMesh(grassGeo, materials.foliage3DMat, grassPositions.length);
+  grassInst.receiveShadow = false;
   grassPositions.forEach((g, i) => {
     dummy.position.set(g.x, g.y, g.z);
     dummy.rotation.set(0, g.rot, 0);
     dummy.scale.set(g.s, g.s * (0.85 + rng() * 0.35), g.s);
     dummy.updateMatrix();
     grassInst.setMatrixAt(i, dummy.matrix);
-    grassInst.setColorAt(i, new T.Color(g.tint, g.tint * 1.02, g.tint * 0.94));
+    grassInst.setColorAt(i, new T.Color(g.tint, g.tint * 1.03, g.tint * 0.94));
   });
   scene.add(grassInst);
+
+  const dianthusGeo = create3DDianthusTuftGeometry(rng);
+  const dianthusInst = new T.InstancedMesh(dianthusGeo, materials.foliage3DMat, dianthusPositions.length);
+  dianthusInst.receiveShadow = false;
+  dianthusPositions.forEach((g, i) => {
+    dummy.position.set(g.x, g.y, g.z);
+    dummy.rotation.set(0, g.rot, 0);
+    dummy.scale.set(g.s * 1.05, g.s * (0.9 + rng() * 0.3), g.s * 1.05);
+    dummy.updateMatrix();
+    dianthusInst.setMatrixAt(i, dummy.matrix);
+    dianthusInst.setColorAt(i, new T.Color(g.tint, g.tint * 0.98, g.tint));
+  });
+  scene.add(dianthusInst);
 
   // 5. Hydrangea & garden foliage shrubs along foreground, path bends & pond edge
   const shrubPositions = [];
@@ -382,7 +637,7 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
       rot: rng() * Math.PI * 2
     });
   }
-  const shrubGeo = createCrossedTuftGeometry(1.15, 0.92);
+  const shrubGeo = createCrossedTuftGeometry(1.18, 0.94);
   const shrubInst = new T.InstancedMesh(shrubGeo, materials.shrubCardMat, shrubPositions.length);
   shrubInst.castShadow = true;
   shrubInst.receiveShadow = true;
@@ -392,7 +647,7 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
     dummy.scale.set(s.s, s.s * (0.85 + rng() * 0.25), s.s);
     dummy.updateMatrix();
     shrubInst.setMatrixAt(i, dummy.matrix);
-    const shade = 0.82 + rng() * 0.26;
+    const shade = 0.84 + rng() * 0.24;
     shrubInst.setColorAt(i, new T.Color(shade, shade * 0.97, shade));
   });
   scene.add(shrubInst);
@@ -529,5 +784,5 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
     scene.add(sideR);
   }
 
-  return { grassInst, shrubInst };
+  return { grassInst, dianthusInst, shrubInst };
 }
