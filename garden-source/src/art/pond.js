@@ -178,15 +178,15 @@ export function buildReflectivePond(scene, lib, sunDir) {
   });
   pondGroup.add(padInst);
 
-  // Floating sakura petals resting on water surface
-  const floatPetalGeo = new T.PlaneGeometry(0.09, 0.07);
+  // Floating shaped cherry-blossom petals resting on water surface
+  const floatPetalGeo = new T.PlaneGeometry(0.115, 0.115);
   floatPetalGeo.rotateX(-Math.PI / 2);
   const floatPetals = new T.InstancedMesh(
     floatPetalGeo,
-    new T.MeshStandardMaterial({ color: PALETTE.blossomMid, roughness: 0.65 }),
-    64
+    materials.cherryPetalMat,
+    72
   );
-  for (let i = 0; i < 64; i++) {
+  for (let i = 0; i < 72; i++) {
     const a = rng() * Math.PI * 2;
     const rad = 1.0 + rng() * 3.9;
     const fx = -10.6 + Math.cos(a) * rad;
@@ -200,7 +200,7 @@ export function buildReflectivePond(scene, lib, sunDir) {
   pondGroup.add(floatPetals);
 
   // Expanding concentric cherry-blossom water ripples across the pond surface (1 batched InstancedMesh)
-  const rippleCount = 12;
+  const rippleCount = 16;
   const rippleGeo = new T.RingGeometry(0.18, 0.215, 24);
   rippleGeo.rotateX(-Math.PI / 2);
   const rippleMat = new T.MeshBasicMaterial({
@@ -218,11 +218,12 @@ export function buildReflectivePond(scene, lib, sunDir) {
       x: -10.6 + Math.cos(a) * rad,
       z: -2.2 + Math.sin(a) * rad * 1.25,
       phase: rng(),
-      speed: 0.22 + rng() * 0.14,
+      speed: 0.24 + rng() * 0.14,
       maxScale: 1.5 + rng() * 1.4
     });
   }
   pondGroup.add(rippleInst);
+  let nextRippleIdx = 0;
 
   // Cattails & tall pond reeds clustered around the banks
   const reedBladeGeo = new T.ConeGeometry(0.028, 1.05, 4);
@@ -281,6 +282,8 @@ export function buildReflectivePond(scene, lib, sunDir) {
   // Timber arched footbridge over the northern pond cove
   buildFootbridge(scene, lib);
 
+  let curTime = 0;
+
   return {
     waterReflective,
     waterFallback,
@@ -288,7 +291,15 @@ export function buildReflectivePond(scene, lib, sunDir) {
       waterReflective.visible = enabled;
       waterFallback.visible = !enabled;
     },
+    spawnRipple(rx, rz) {
+      const rp = ripples[nextRippleIdx];
+      nextRippleIdx = (nextRippleIdx + 1) % rippleCount;
+      rp.x = rx;
+      rp.z = rz;
+      rp.phase = (-(curTime * rp.speed) % 1 + 1) % 1;
+    },
     update(dt, t) {
+      curTime = t;
       if (waterReflective.visible && waterReflective.material.uniforms.time) {
         waterReflective.material.uniforms.time.value += dt * 0.38;
       }

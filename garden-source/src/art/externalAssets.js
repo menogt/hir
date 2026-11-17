@@ -144,29 +144,30 @@ export async function loadExternalGardenModels(scene, landmarkCoords = []) {
 
     const leavesMat = new T.MeshStandardMaterial({
       map: leavesTex,
-      alphaTest: 0.36,
+      color: '#ffe8ef',
+      alphaTest: 0.34,
       transparent: false,
       side: T.DoubleSide,
-      roughness: 0.82,
-      emissive: new T.Color('#4a2033'),
-      emissiveIntensity: 0.16
+      roughness: 0.8,
+      emissive: new T.Color('#5c2840'),
+      emissiveIntensity: 0.22
     });
-    applyFoliageWind(leavesMat, 0.42, 44.0);
+    applyFoliageWind(leavesMat, 0.45, 44.0);
 
     const trunkMat = new T.MeshStandardMaterial({
       map: trunkTex,
-      color: '#6b4d41',
-      roughness: 0.92
+      color: '#6d4c3e',
+      roughness: 0.9
     });
 
     const groundPetalMat = new T.MeshStandardMaterial({
       map: petalsTex,
-      alphaTest: 0.32,
+      alphaTest: 0.3,
       transparent: false,
       side: T.DoubleSide,
-      roughness: 0.72,
+      roughness: 0.7,
       emissive: new T.Color('#663047'),
-      emissiveIntensity: 0.15
+      emissiveIntensity: 0.18
     });
 
     treeObj.traverse((c) => {
@@ -180,16 +181,32 @@ export async function loadExternalGardenModels(scene, landmarkCoords = []) {
     const box = new T.Box3().setFromObject(treeObj);
     const size = box.getSize(new T.Vector3());
     const center = box.getCenter(new T.Vector3());
-    const normScale = 5.4 / Math.max(0.001, size.y);
+    const normScale = 5.6 / Math.max(0.001, size.y);
     const anchorMat = new T.Matrix4()
       .makeScale(normScale, normScale, normScale)
       .multiply(new T.Matrix4().makeTranslation(-center.x, -box.min.y, -center.z));
 
-    const treeSpots = [
-      [-6.8, 13.8, 1.02, 0.4],
-      [-15.6, -1.6, 1.12, 2.7],
-      [7.8, -8.5, 1.0, 4.1]
+    const candidateSpots = [
+      [-4.8, 14.8, 0.98, 0.4],
+      [5.4, 12.8, 0.95, 1.7],
+      [-5.4, 8.2, 1.04, 2.5],
+      [5.2, 1.2, 1.0, 3.8],
+      [-15.6, -1.6, 1.14, 2.7],
+      [-6.8, -6.4, 0.96, 5.1],
+      [5.4, -7.2, 1.02, 4.1],
+      [5.8, -14.0, 1.08, 1.1],
+      [-8.4, -22.2, 1.06, 0.9],
+      [5.6, -27.4, 1.02, 3.3],
+      [-4.6, -32.2, 1.1, 2.1]
     ];
+    const treeSpots = candidateSpots.filter(
+      ([tx, tz]) =>
+        Math.abs(tx - pathX(tz)) >= 3.2 &&
+        pondDistance(tx, tz) >= 5.6 &&
+        Math.hypot(tx + 4.2, tz + 14.2) >= 3.7 &&
+        !nearLandmark(tx, tz, 2.3)
+    );
+    if (!treeSpots.length) return;
 
     const parts = collectMeshParts(treeObj);
     const combinedMat = new T.Matrix4();

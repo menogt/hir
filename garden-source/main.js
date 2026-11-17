@@ -187,20 +187,38 @@ for (let i = 0; i < 32; i++) {
   wisps.push({ o: sp, x: wx, y: wy, z: wz, phase: rng() * 6.28, baseScale: sc });
 }
 
-const maxPetals = mobile ? 75 : 145;
-const petalShape = new T.PlaneGeometry(0.085, 0.065);
-const petalFallMat = new T.MeshStandardMaterial({
-  color: PALETTE.blossomPale,
-  roughness: 0.65,
-  side: T.DoubleSide
+// Dropping cherry-blossom flurry (bezier petal shape & flutter tumble from a-flurry-of-cherry-blossoms)
+const maxPetals = mobile ? 95 : 190;
+const petalShape = new T.PlaneGeometry(0.145, 0.145, 2, 2);
+{
+  const pPos = petalShape.attributes.position;
+  for (let i = 0; i < pPos.count; i++) {
+    const px = pPos.getX(i);
+    const py = pPos.getY(i);
+    // Subtle natural petal cupping & arch
+    const cupZ = (px * px) * 1.4 - (py * py) * 0.9;
+    pPos.setZ(i, cupZ);
+  }
+  petalShape.computeVertexNormals();
+}
+const petals = new T.InstancedMesh(petalShape, lib.materials.cherryPetalMat, maxPetals);
+const petalPalette = [new T.Color('#ffdce8'), new T.Color('#f7b5ce'), new T.Color('#f298ba'), new T.Color('#fff0f5')];
+const petalData = Array.from({ length: maxPetals }, (_, idx) => {
+  petals.setColorAt(idx, petalPalette[idx % petalPalette.length]);
+  return {
+    x: (rng() - 0.5) * 24,
+    y: 0.4 + rng() * 8.2,
+    z: 22 - rng() * 58,
+    vx: (rng() - 0.5) * 0.45,
+    vy: 0.45 + rng() * 0.35,
+    theta: rng() * Math.PI * 2,
+    phi: rng() * Math.PI * 2,
+    dTheta: 0.7 + rng() * 0.8,
+    dPhi: 0.8 + rng() * 0.9,
+    sc: 0.78 + rng() * 0.55,
+    restTimer: 0
+  };
 });
-const petals = new T.InstancedMesh(petalShape, petalFallMat, maxPetals);
-const petalData = Array.from({ length: maxPetals }, () => ({
-  x: (rng() - 0.5) * 20,
-  y: rng() * 7.5,
-  z: 22 - rng() * 58,
-  p: rng() * 6.28
-}));
 scene.add(petals);
 if (reduced) petals.count = 0;
 
@@ -945,11 +963,38 @@ function frame(now) {
   if (!reduced && petals.count > 0) {
     for (let i = 0; i < petals.count; i++) {
       const p = petalData[i];
-      p.y -= dt * 0.32;
-      if (p.y < 0) p.y = 7.5;
-      dummy.position.set(p.x + Math.sin(t * 0.45 + p.p) * 0.85, p.y, p.z);
-      dummy.rotation.set(t * 0.5 + p.p, t * 0.3, t * 0.65);
-      dummy.scale.setScalar(1);
+      const groundY = Math.max(-0.18, getTerrainHeight(p.x, p.z)) + 0.025;
+      if (p.restTimer > 0) {
+        p.restTimer -= dt;
+        const fade = Math.max(0.001, Math.min(1, p.restTimer / 1.1));
+        dummy.position.set(p.x, groundY, p.z);
+        dummy.rotation.set(-Math.PI / 2, p.theta, 0);
+        dummy.scale.setScalar(p.sc * fade);
+        if (p.restTimer <= 0) {
+          p.x = (rng() - 0.5) * 24;
+          p.y = 6.2 + rng() * 3.0;
+          p.z = 22 - rng() * 58;
+          p.theta = rng() * Math.PI * 2;
+          p.phi = rng() * Math.PI * 2;
+        }
+      } else {
+        p.x += (p.vx + Math.sin(t * 0.7 + p.theta) * 0.28) * dt;
+        p.y -= p.vy * dt;
+        p.z += Math.cos(t * 0.55 + p.phi) * 0.14 * dt;
+        p.theta += p.dTheta * dt;
+        p.phi += p.dPhi * dt;
+
+        if (p.y <= groundY) {
+          p.y = groundY;
+          p.restTimer = 1.1;
+          if (pondDistance(p.x, p.z) < 4.9) {
+            pond.spawnRipple(p.x, p.z);
+          }
+        }
+        dummy.position.set(p.x, p.y, p.z);
+        dummy.rotation.set(p.phi, p.theta, Math.sin(p.phi) * 0.6);
+        dummy.scale.set(p.sc, p.sc * (0.45 + 0.55 * Math.abs(Math.sin(p.phi))), p.sc);
+      }
       dummy.updateMatrix();
       petals.setMatrixAt(i, dummy.matrix);
     }

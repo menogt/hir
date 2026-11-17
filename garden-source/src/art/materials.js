@@ -571,6 +571,47 @@ export function createMaterialLibrary(renderer) {
   const movieScreenTex = new T.CanvasTexture(mvCanvas);
   movieScreenTex.colorSpace = T.SRGBColorSpace;
 
+  // 8. Authentic cherry blossom petal texture (ported from a-flurry-of-cherry-blossoms/script.js)
+  const cpCanvas = document.createElement('canvas');
+  cpCanvas.width = cpCanvas.height = 128;
+  const cpCtx = cpCanvas.getContext('2d');
+  cpCtx.save();
+  cpCtx.translate(64, 68);
+  const cpGrad = cpCtx.createRadialGradient(0, 34, 2, 0, 12, 68);
+  cpGrad.addColorStop(0, 'hsl(330, 72%, 66%)');
+  cpGrad.addColorStop(0.28, 'hsl(330, 62%, 78%)');
+  cpGrad.addColorStop(1, 'hsl(330, 48%, 92%)');
+  cpCtx.fillStyle = cpGrad;
+  cpCtx.strokeStyle = 'hsl(330, 45%, 82%)';
+  cpCtx.lineWidth = 1.5;
+  cpCtx.beginPath();
+  cpCtx.moveTo(0, 38);
+  cpCtx.bezierCurveTo(-56, 18, -10, -56, 0, -18);
+  cpCtx.bezierCurveTo(10, -56, 56, 18, 0, 38);
+  cpCtx.fill();
+  cpCtx.stroke();
+  cpCtx.strokeStyle = 'rgba(205, 115, 152, 0.42)';
+  cpCtx.lineWidth = 1.2;
+  for (let i = -4; i < 4; i++) {
+    cpCtx.beginPath();
+    cpCtx.moveTo(0, 38);
+    cpCtx.quadraticCurveTo(i * 11, 8, i * 3.8, -22 + Math.abs(i) * 2);
+    cpCtx.stroke();
+  }
+  cpCtx.restore();
+  const cherryPetalTex = new T.CanvasTexture(cpCanvas);
+  cherryPetalTex.colorSpace = T.SRGBColorSpace;
+
+  const cherryPetalMat = new T.MeshStandardMaterial({
+    map: cherryPetalTex,
+    alphaTest: 0.25,
+    side: T.DoubleSide,
+    roughness: 0.56,
+    metalness: 0.0,
+    emissive: new T.Color('#6b3048'),
+    emissiveIntensity: 0.25
+  });
+
   return {
     textures: {
       grassTex,
@@ -583,6 +624,7 @@ export function createMaterialLibrary(renderer) {
       welcomeSignTex,
       glowTex,
       blossomTex,
+      cherryPetalTex,
       assignmentPlaceholderTex,
       examSheetTex,
       phoneLockTex,
@@ -603,6 +645,7 @@ export function createMaterialLibrary(renderer) {
       grassCardMat,
       shrubCardMat,
       foliage3DMat,
+      cherryPetalMat,
       lilyPadMat,
       linenMat,
       ceramicMat,

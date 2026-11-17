@@ -652,16 +652,11 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
   });
   scene.add(shrubInst);
 
-  // 6. Fallen sakura petal carpet tucked between path stones & tree bases
-  const petalCarpetCount = 460;
-  const petalGeo = new T.PlaneGeometry(0.11, 0.08);
+  // 6. Fallen cherry blossom petal carpet tucked between path stones & tree bases
+  const petalCarpetCount = 480;
+  const petalGeo = new T.PlaneGeometry(0.13, 0.13);
   petalGeo.rotateX(-Math.PI / 2);
-  const petalMat = new T.MeshStandardMaterial({
-    color: PALETTE.blossomMid,
-    roughness: 0.78,
-    side: T.DoubleSide
-  });
-  const petalCarpet = new T.InstancedMesh(petalGeo, petalMat, petalCarpetCount);
+  const petalCarpet = new T.InstancedMesh(petalGeo, materials.cherryPetalMat, petalCarpetCount);
   for (let i = 0; i < petalCarpetCount; i++) {
     const z = 23.5 - rng() * 59;
     const x = pathX(z) + (rng() - 0.5) * 4.8;
