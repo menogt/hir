@@ -48,6 +48,73 @@ function createWaterlilyFlower(lib, scale = 1) {
   return g;
 }
 
+function createKoiFish(bodyColor = '#eb6b34', spotColor = '#fff4e6', scale = 1) {
+  const g = new T.Group();
+  const bodyMat = new T.MeshStandardMaterial({
+    color: bodyColor,
+    roughness: 0.25,
+    metalness: 0.08,
+    emissive: new T.Color(bodyColor),
+    emissiveIntensity: 0.16
+  });
+  const spotMat = new T.MeshStandardMaterial({
+    color: spotColor,
+    roughness: 0.3,
+    emissive: new T.Color(spotColor),
+    emissiveIntensity: 0.1
+  });
+  const finMat = new T.MeshStandardMaterial({
+    color: '#ffe8d6',
+    roughness: 0.4,
+    transparent: true,
+    opacity: 0.78,
+    side: T.DoubleSide
+  });
+
+  // Streamlined teardrop koi torso (+Z forward)
+  const torso = new T.Mesh(new T.SphereGeometry(0.068, 12, 8), bodyMat);
+  torso.scale.set(0.75, 0.55, 2.3);
+  g.add(torso);
+
+  // Calico dorsal spot
+  const spot = new T.Mesh(new T.SphereGeometry(0.048, 8, 6), spotMat);
+  spot.scale.set(0.82, 0.45, 1.35);
+  spot.position.set(0, 0.015, 0.04);
+  g.add(spot);
+
+  // Dorsal ridge fin
+  const dorsal = new T.Mesh(new T.PlaneGeometry(0.11, 0.04), finMat);
+  dorsal.rotation.y = Math.PI / 2;
+  dorsal.position.set(0, 0.036, -0.01);
+  g.add(dorsal);
+
+  // Pectoral side fins
+  for (const side of [-1, 1]) {
+    const pFin = new T.Mesh(new T.PlaneGeometry(0.075, 0.045), finMat);
+    pFin.rotation.x = -Math.PI / 2 + 0.18;
+    pFin.rotation.z = side * 0.45;
+    pFin.position.set(side * 0.055, -0.004, 0.045);
+    g.add(pFin);
+  }
+
+  // Articulated swishing tail fin pivot
+  const tailPivot = new T.Group();
+  tailPivot.position.set(0, 0, -0.145);
+  g.add(tailPivot);
+  const tailShape = new T.Shape();
+  tailShape.moveTo(0, 0);
+  tailShape.lineTo(-0.085, 0.052);
+  tailShape.lineTo(-0.06, 0);
+  tailShape.lineTo(-0.085, -0.052);
+  tailShape.closePath();
+  const tailFin = new T.Mesh(new T.ShapeGeometry(tailShape), finMat);
+  tailFin.rotation.y = Math.PI / 2;
+  tailPivot.add(tailFin);
+
+  g.scale.setScalar(scale);
+  return { group: g, tailPivot };
+}
+
 function buildFootbridge(scene, lib) {
   const { materials } = lib;
   // Curved timber footbridge spanning the northern cove of the pond
@@ -282,6 +349,20 @@ export function buildReflectivePond(scene, lib, sunDir) {
   // Timber arched footbridge over the northern pond cove
   buildFootbridge(scene, lib);
 
+  // 5 graceful koi fish gliding along smooth oval & figure-8 paths at the pond surface
+  const koiSpecs = [
+    { cx: -9.8, cz: -1.4, rx: 1.55, rz: 1.95, speed: 0.28, phase: 0.2, fig8: false, col: '#ed6a32', spot: '#fff5ea', sc: 1.15 },
+    { cx: -11.2, cz: -2.8, rx: 1.4, rz: 2.1, speed: -0.24, phase: 1.9, fig8: true, col: '#f5b841', spot: '#fff4d4', sc: 1.02 },
+    { cx: -8.9, cz: 0.6, rx: 1.15, rz: 1.35, speed: 0.31, phase: 3.6, fig8: false, col: '#fff1e8', spot: '#d9483b', sc: 1.08 },
+    { cx: -11.8, cz: 0.4, rx: 1.35, rz: 1.65, speed: 0.22, phase: 5.1, fig8: false, col: '#e85d3c', spot: '#ffe7c2', sc: 0.94 },
+    { cx: -10.3, cz: -4.1, rx: 1.25, rz: 1.15, speed: -0.27, phase: 2.8, fig8: true, col: '#f7c95c', spot: '#ffffff', sc: 0.96 }
+  ];
+  const kois = koiSpecs.map((k) => {
+    const fish = createKoiFish(k.col, k.spot, k.sc);
+    pondGroup.add(fish.group);
+    return { ...k, ...fish };
+  });
+
   let curTime = 0;
 
   return {
@@ -317,6 +398,18 @@ export function buildReflectivePond(scene, lib, sunDir) {
         rippleInst.setMatrixAt(i, dummy.matrix);
       });
       rippleInst.instanceMatrix.needsUpdate = true;
+
+      kois.forEach((k) => {
+        const a = t * k.speed + k.phase;
+        const aNext = a + 0.05 * Math.sign(k.speed || 1);
+        const fx = k.cx + Math.cos(a) * k.rx;
+        const fz = k.cz + (k.fig8 ? Math.sin(a * 2) * k.rz * 0.52 : Math.sin(a) * k.rz);
+        const nx = k.cx + Math.cos(aNext) * k.rx;
+        const nz = k.cz + (k.fig8 ? Math.sin(aNext * 2) * k.rz * 0.52 : Math.sin(aNext) * k.rz);
+        k.group.position.set(fx, waterY + 0.008 + Math.sin(t * 2.2 + k.phase) * 0.004, fz);
+        k.group.rotation.y = Math.atan2(nx - fx, nz - fz);
+        k.tailPivot.rotation.y = Math.sin(t * 7.2 + k.phase) * 0.36;
+      });
     }
   };
 }

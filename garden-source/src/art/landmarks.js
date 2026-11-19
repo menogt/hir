@@ -300,6 +300,7 @@ function createPhotoFrame(lib, w = 0.46, h = 0.36, tex = null) {
   );
   art.position.z = 0.025;
   g.add(art);
+  g.userData.artMesh = art;
 
   // Easel kickstand behind frame
   const leg = new T.Mesh(new T.BoxGeometry(0.04, h * 0.82, 0.03), materials.woodDarkMat);
@@ -363,6 +364,21 @@ export function buildMemoryLandmark(scene, lib, memory) {
   addContactShadow(g, materials.contactShadowMat, 1.15, 0.015);
 
   const animated = {};
+  const virtualLights = [];
+  const addVirtualLight = (lx, ly, lz, color, intensity, distance, decay = 1.8) => {
+    const vl = {
+      x: x + lx,
+      y: y + ly,
+      z: z + lz,
+      color,
+      intensity,
+      baseIntensity: intensity,
+      distance,
+      decay
+    };
+    virtualLights.push(vl);
+    return vl;
+  };
 
   switch (memory.assetReference) {
     case 'headband-stand':
@@ -574,6 +590,7 @@ export function buildMemoryLandmark(scene, lib, memory) {
       frame.position.set(0, 1.08, 0.09);
       frame.rotation.x = -0.14;
       easel.add(frame);
+      animated.photoStandArt = frame.userData.artMesh;
 
       // Side wooden stool holding university sustainability assignment details:
       // Clipboard with assignment field sheet, brass clip, pen, and potted green seedling
@@ -830,9 +847,7 @@ export function buildMemoryLandmark(scene, lib, memory) {
       phoneRing.rotation.x = -Math.PI / 2;
       g.add(phoneRing);
 
-      const phoneLight = new T.PointLight('#ffd29d', 0.9, 3.2, 1.8);
-      phoneLight.position.set(-0.17, tableH + 0.32, 0.14);
-      g.add(phoneLight);
+      const phoneLight = addVirtualLight(-0.17, tableH + 0.32, 0.14, '#ffd29d', 0.9, 3.2, 1.8);
 
       // Wrapped Chocolate Bar Gift (right side) — rich burgundy/purple wrapper, gold foil & exposed chocolate squares
       const chocGroup = new T.Group();
@@ -1020,9 +1035,9 @@ export function buildMemoryLandmark(scene, lib, memory) {
       miniLantern.position.set(0.38, tableH + 0.032, -0.17);
       g.add(miniLantern);
 
-      const tableGlow = new T.PointLight('#ffbe70', 1.15, 3.8, 1.8);
-      tableGlow.position.set(0.15, tableH + 0.32, 0.05);
-      g.add(tableGlow);
+      const tableGlow = addVirtualLight(0.15, tableH + 0.32, 0.05, '#ffbe70', 1.4, 4.0, 1.8);
+      cupcake.tableGlow = tableGlow;
+      cupcake.lit = true;
 
       animated.cupcake = cupcake;
       break;
@@ -1275,9 +1290,8 @@ export function buildMemoryLandmark(scene, lib, memory) {
       }
 
       // Warm brass music lamp illuminating the sheet music & keys
-      const lampLight = new T.PointLight('#ffd294', 1.4, 3.6, 1.8);
-      lampLight.position.set(0, keybedY + 0.44, 0.08);
-      g.add(lampLight);
+      const lampLight = addVirtualLight(0, keybedY + 0.44, 0.08, '#ffd294', 1.6, 3.8, 1.8);
+      animated.organLamp = lampLight;
 
       const miniLantern = createMiniTableLantern(lib);
       miniLantern.position.set(-0.38, keybedY + 0.115, -0.17);
@@ -1641,9 +1655,7 @@ export function buildMemoryLandmark(scene, lib, memory) {
         brokenBladeGroup.add(tooth);
       }
 
-      const roomLight = new T.PointLight('#ffd298', 1.6, 4.2, 1.8);
-      roomLight.position.set(0.1, 1.25, 0.25);
-      g.add(roomLight);
+      addVirtualLight(0.1, 1.25, 0.25, '#ffd298', 1.8, 4.4, 1.8);
       break;
     }
 
@@ -1840,13 +1852,8 @@ export function buildMemoryLandmark(scene, lib, memory) {
       }
 
       // Subtle atmospheric horror-night lighting (warm crimson-amber + midnight cool glow)
-      const nightGlowLeft = new T.PointLight('#ff8f70', 1.6, 4.2, 1.8);
-      nightGlowLeft.position.set(-0.65, 0.72, 0.1);
-      g.add(nightGlowLeft);
-
-      const nightGlowRight = new T.PointLight('#9ab8ff', 1.3, 4.2, 1.8);
-      nightGlowRight.position.set(0.65, 0.68, 0.1);
-      g.add(nightGlowRight);
+      const nightGlowLeft = addVirtualLight(-0.65, 0.72, 0.1, '#ff8f70', 1.8, 4.4, 1.8);
+      const nightGlowRight = addVirtualLight(0.65, 0.68, 0.1, '#9ab8ff', 1.5, 4.4, 1.8);
 
       animated.movieNight = { moteGroup, motes, nightGlowLeft, nightGlowRight };
       break;
@@ -1866,6 +1873,7 @@ export function buildMemoryLandmark(scene, lib, memory) {
   batchStaticGroup(
     g,
     [
+      animated.photoStandArt,
       animated.cupcake?.flame,
       animated.firstTextPhone?.screen,
       animated.firstTextPhone?.ring,
@@ -1873,7 +1881,7 @@ export function buildMemoryLandmark(scene, lib, memory) {
     ].filter(Boolean)
   );
 
-  return { group: g, animated };
+  return { group: g, animated, virtualLights };
 }
 
 export function buildShySpirit(scene, lib, x = 2.2, z = -12.0) {
@@ -2023,13 +2031,20 @@ export function buildBlossomShrine(scene, lib, x = 0, z = -30.0) {
   halo.scale.set(1.75, 1.75, 1.75);
   bloom.add(halo);
 
-  const shrineLight = new T.PointLight(PALETTE.lanternGlow, 3.8, 9.0, 1.8);
-  shrineLight.position.set(0, 0.95, 0);
-  shrine.add(shrineLight);
+  const shrineLight = {
+    x,
+    y: y + 0.95,
+    z,
+    color: PALETTE.lanternGlow,
+    intensity: 3.8,
+    baseIntensity: 3.8,
+    distance: 9.0,
+    decay: 1.8
+  };
 
   addContactShadow(shrine, materials.contactShadowMat, 1.5, 0.018);
 
-  return { bloomPetals, coreOrb };
+  return { bloomPetals, coreOrb, shrineLight };
 }
 
 export function buildPlayerOrb(scene, lib) {

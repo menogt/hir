@@ -17,8 +17,10 @@
     <div class="toolbar">
       <button id="mapButton" type="button" aria-expanded="false">garden map</button>
       <button id="journalButton" type="button" aria-expanded="false">memories (<span id="journalCount">0/10</span>)</button>
+      <button id="moodButton" type="button" title="Switch sky & lighting mood">sky: twilight</button>
       <button id="qualityButton" type="button" title="Cycle visual quality preset">quality: high</button>
       <button id="sound" type="button" aria-pressed="true">♪ sound on</button>
+      <button id="snapshotBtn" type="button" class="icon-pill" aria-label="Save garden postcard" title="Save clean postcard snapshot">📷</button>
     </div>
   </header>
 
@@ -27,6 +29,10 @@
       <p class="eyebrow">A TINY WALKABLE MEMORY WORLD</p>
       <h1>Hey, <em>Hirushi.</em></h1>
       <p class="entry-lead">I made you a quiet little garden to wander through—holding the original four garden moments alongside ten small landmarks from our university days.</p>
+      <div id="entryLoader" class="entry-loader" aria-live="polite">
+        <span id="entryLoaderText">Preparing lanterns &amp; blossoms…</span>
+        <div class="loader-track"><i id="entryLoaderBar"></i></div>
+      </div>
       <button class="primary" id="begin" type="button">step into the garden →</button>
       <small>
         Walk with <strong>WASD</strong> or <strong>Arrow keys</strong> · Drag to look around · Press <strong>E</strong> near a landmark<br>
@@ -93,6 +99,13 @@
         <span>+ preview a personal photo here</span>
         <input type="file" id="photoInput" accept="image/*" hidden>
       </label>
+    </div>
+
+    <div id="memoryActionBar" class="scene-focus-bar" hidden>
+      <span id="memoryActionLabel" class="focus-label"></span>
+      <div class="focus-actions">
+        <button id="memoryActionBtn" type="button" class="small-btn"></button>
+      </div>
     </div>
 
     <div id="sceneFocusBar" class="scene-focus-bar" hidden>

@@ -111,9 +111,16 @@ export function buildLantern(scene, lib, x, z, { scale = 1, hasLight = false, li
 
   let pointLight = null;
   if (hasLight) {
-    pointLight = new T.PointLight(PALETTE.amberCore, lightIntensity, lightDist, 1.8);
-    pointLight.position.set(0, 1.12, 0);
-    g.add(pointLight);
+    pointLight = {
+      x,
+      y: y + 1.12 * scale,
+      z,
+      color: PALETTE.amberCore,
+      intensity: lightIntensity,
+      baseIntensity: lightIntensity,
+      distance: lightDist,
+      decay: 1.8
+    };
   }
 
   return { group: g, light: pointLight, halo };
@@ -168,9 +175,16 @@ export function buildStoneYukimiLantern(scene, lib, x, z) {
   jewel.position.y = 1.48;
   g.add(jewel);
 
-  const light = new T.PointLight(PALETTE.amberCore, 3.2, 9.0, 1.8);
-  light.position.set(0, 0.98, 0);
-  g.add(light);
+  const light = {
+    x,
+    y: y + 0.98,
+    z,
+    color: PALETTE.amberCore,
+    intensity: 3.2,
+    baseIntensity: 3.2,
+    distance: 9.0,
+    decay: 1.8
+  };
 
   const halo = new T.Sprite(
     new T.SpriteMaterial({
@@ -370,9 +384,16 @@ export function buildGardenPavilion(scene, lib, x = -4.2, z = -14.2) {
     g.add(halo);
   }
 
-  const warmCenterLight = new T.PointLight('#ffbe70', 7.5, 13.0, 1.6);
-  warmCenterLight.position.set(0, 2.35, 0.2);
-  g.add(warmCenterLight);
+  const warmCenterLight = {
+    x,
+    y: y + 2.35,
+    z: z + 0.2,
+    color: '#ffbe70',
+    intensity: 7.5,
+    baseIntensity: 7.5,
+    distance: 13.0,
+    decay: 1.6
+  };
   pavilionLights.push(warmCenterLight);
 
   addContactShadow(g, materials.contactShadowMat, 3.2, 0.02);
