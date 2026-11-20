@@ -463,8 +463,9 @@ export function placeGardenLanterns(scene, lib) {
     [pathX(-11.5) - 2.35, -11.5, true],
     [pathX(-18.5) + 2.2, -18.5, false],
     [pathX(-24.0) - 2.2, -24.0, true],
-    [-2.4, -29.2, false],
-    [2.4, -29.2, false]
+    [pathX(-31.0) + 2.2, -31.0, true],
+    [-2.6, -39.6, false],
+    [2.6, -39.6, false]
   ];
   spots.forEach(([lx, lz, realLight], idx) => {
     const l = buildLantern(lanternBatchRoot, lib, lx, lz, {

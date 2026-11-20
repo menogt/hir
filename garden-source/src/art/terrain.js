@@ -2,7 +2,8 @@ import * as T from 'three';
 import { PALETTE, createRng, batchStaticGroup } from './materials.js';
 
 export function pathX(z) {
-  return Math.sin(z * 0.13) * 1.75;
+  const taper = T.MathUtils.smoothstep(z, -40.0, -32.0);
+  return Math.sin(z * 0.13) * 1.75 * taper;
 }
 
 export function pondDistance(x, z) {
@@ -23,8 +24,10 @@ export function getTerrainHeight(x, z) {
 
   const distToPath = Math.abs(x - pathX(z));
   const distToPavilion = Math.hypot(x + 4.2, z + 14.2);
-  const pathFlat = T.MathUtils.smoothstep(distToPath, 1.9, 6.8);
+  const distToShrine = Math.hypot(x, z + 41.0);
+  const pathFlat = z >= -42.5 ? T.MathUtils.smoothstep(distToPath, 1.9, 6.8) : 1;
   const pavFlat = T.MathUtils.smoothstep(distToPavilion, 3.6, 7.2);
+  const shrineFlat = T.MathUtils.smoothstep(distToShrine, 3.2, 6.8);
 
   // Rolling garden mounds & distant hillside enclosure
   const gentle =
@@ -32,10 +35,10 @@ export function getTerrainHeight(x, z) {
     Math.sin((x - z) * 0.065) * 0.35;
 
   const edgeX = Math.max(0, Math.abs(x) - 15.5);
-  const edgeBack = Math.max(0, -40.0 - z);
+  const edgeBack = Math.max(0, -46.5 - z);
   const perimeterRise = Math.min(2.6, edgeX * edgeX * 0.0055 + edgeBack * edgeBack * 0.0045);
 
-  return Math.max(-0.04, gentle * pathFlat * pavFlat + perimeterRise);
+  return Math.max(-0.04, gentle * pathFlat * pavFlat * shrineFlat + perimeterRise);
 }
 
 function createFlagstoneGeometry(rng, radius = 0.65) {
@@ -92,31 +95,54 @@ function createBoulderGeometry(rng, detail = 2) {
   return geo;
 }
 
-function buildBladeGeometry({ baseW = 0.045, height = 0.45, bend = 0.14, yaw = 0, lean = 0.05, ox = 0, oz = 0, segs = 3, colBase, colTip }) {
+function buildBladeGeometry({
+  baseW = 0.048,
+  height = 0.48,
+  bend = 0.15,
+  yaw = 0,
+  lean = 0.05,
+  ox = 0,
+  oz = 0,
+  segs = 3,
+  colBase,
+  colMid,
+  colTip
+}) {
   const positions = [];
   const colors = [];
   const indices = [];
   const cosY = Math.cos(yaw);
   const sinY = Math.sin(yaw);
+  const cMid = colMid || colBase.clone().lerp(colTip, 0.52);
+  const tmpC = new T.Color();
 
+  // 3 vertices per cross-section row (left edge, recessed center spine, right edge)
+  // creating a genuine V-creased 3D blade that catches highlights along its fold
   for (let s = 0; s <= segs; s++) {
     const t = s / segs;
-    const w = baseW * (1 - t * 0.92);
+    const w = baseW * (1 - Math.pow(t, 1.2) * 0.94);
     const y = t * height;
     const fwd = lean * t + bend * t * t;
-    const c = colBase.clone().lerp(colTip, t);
+    const vRidge = w * 0.28 * (1 - t * 0.7);
+    if (t < 0.5) tmpC.lerpColors(colBase, cMid, t * 2);
+    else tmpC.lerpColors(cMid, colTip, (t - 0.5) * 2);
 
-    for (const side of [-1, 1]) {
-      const lx = side * w;
-      const lz = fwd;
+    const rowPts = [
+      [-w, fwd + vRidge],
+      [0, fwd - vRidge * 0.65],
+      [w, fwd + vRidge]
+    ];
+    for (const [lx, lz] of rowPts) {
       const wx = ox + lx * cosY - lz * sinY;
       const wz = oz + lx * sinY + lz * cosY;
       positions.push(wx, y, wz);
-      colors.push(c.r, c.g, c.b);
+      colors.push(tmpC.r, tmpC.g, tmpC.b);
     }
     if (s < segs) {
-      const row = s * 2;
-      indices.push(row, row + 1, row + 2, row + 1, row + 3, row + 2);
+      const r0 = s * 3;
+      const r1 = (s + 1) * 3;
+      indices.push(r0, r0 + 1, r1, r0 + 1, r1 + 1, r1);
+      indices.push(r0 + 1, r0 + 2, r1 + 1, r0 + 2, r1 + 2, r1 + 1);
     }
   }
   const g = new T.BufferGeometry();
@@ -125,6 +151,64 @@ function buildBladeGeometry({ baseW = 0.045, height = 0.45, bend = 0.14, yaw = 0
   g.setIndex(indices);
   g.computeVertexNormals();
   return g;
+}
+
+function makeColoredGeo(geo, col) {
+  const nonIdx = geo.index ? geo.toNonIndexed() : geo;
+  if (nonIdx !== geo) geo.dispose();
+  if (!nonIdx.attributes.normal) nonIdx.computeVertexNormals();
+  const count = nonIdx.attributes.position.count;
+  const cols = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    cols[i * 3] = col.r;
+    cols[i * 3 + 1] = col.g;
+    cols[i * 3 + 2] = col.b;
+  }
+  nonIdx.setAttribute('color', new T.BufferAttribute(cols, 3));
+  return nonIdx;
+}
+
+/**
+ * Builds a 5-vertex, 4-triangle cupped 3D flower petal (base -> flared belly -> notched/soft outer tip)
+ * anchored at `(cx, cy, cz)` and pointing outward along angle `ang`.
+ */
+function appendCuppedPetal(petalPos, petalCols, petalIdx, cx, cy, cz, ang, len, width, cupH, pitchUp, cInner, cOuter) {
+  const baseV = petalPos.length / 3;
+  const cA = Math.cos(ang);
+  const sA = Math.sin(ang);
+  const pt = (r, wOff, dy) => [
+    cx + cA * r - sA * wOff,
+    cy + dy,
+    cz + sA * r + cA * wOff
+  ];
+
+  // 0: base center, 1: inner left, 2: inner right, 3: outer left tip, 4: outer right tip, 5: center tip notch
+  const pts = [
+    pt(0.004, 0, 0),
+    pt(len * 0.48, -width * 0.42, len * pitchUp * 0.45 + cupH * 0.15),
+    pt(len * 0.48, width * 0.42, len * pitchUp * 0.45 + cupH * 0.15),
+    pt(len, -width * 0.34, len * pitchUp + cupH),
+    pt(len, width * 0.34, len * pitchUp + cupH),
+    pt(len * 0.92, 0, len * pitchUp + cupH * 0.6)
+  ];
+  const cols = [
+    cInner,
+    cInner.clone().lerp(cOuter, 0.45),
+    cInner.clone().lerp(cOuter, 0.45),
+    cOuter,
+    cOuter,
+    cOuter
+  ];
+  for (let i = 0; i < pts.length; i++) {
+    petalPos.push(pts[i][0], pts[i][1], pts[i][2]);
+    petalCols.push(cols[i].r, cols[i].g, cols[i].b);
+  }
+  petalIdx.push(
+    baseV, baseV + 1, baseV + 2,
+    baseV + 1, baseV + 3, baseV + 5,
+    baseV + 1, baseV + 5, baseV + 2,
+    baseV + 2, baseV + 5, baseV + 4
+  );
 }
 
 function mergeColorGeometries(geos) {
@@ -161,22 +245,25 @@ function mergeColorGeometries(geos) {
 
 function create3DGrassTuftGeometry(rng) {
   const parts = [];
-  const cBase = new T.Color('#425937');
-  const cTip = new T.Color('#86a66c');
-  for (let i = 0; i < 8; i++) {
-    const yaw = (i / 8) * Math.PI * 2 + (rng() - 0.5) * 0.45;
-    const rad = 0.04 + rng() * 0.14;
+  const cBase = new T.Color('#2a3e26');
+  const cMid = new T.Color('#5f8a4e');
+  const cTip = new T.Color('#9ec476');
+  for (let i = 0; i < 15; i++) {
+    const yaw = (i / 15) * Math.PI * 2 + (rng() - 0.5) * 0.42;
+    const isInner = i % 3 === 0;
+    const rad = isInner ? rng() * 0.06 : 0.06 + rng() * 0.16;
     parts.push(
       buildBladeGeometry({
-        baseW: 0.036 + rng() * 0.016,
-        height: 0.36 + rng() * 0.24,
-        bend: 0.1 + rng() * 0.14,
+        baseW: 0.032 + rng() * 0.016,
+        height: (isInner ? 0.44 : 0.3) + rng() * 0.24,
+        bend: 0.1 + rng() * 0.16,
         yaw,
-        lean: 0.04 + rng() * 0.08,
+        lean: 0.04 + rng() * 0.09,
         ox: Math.cos(yaw) * rad,
         oz: Math.sin(yaw) * rad,
-        segs: 2,
+        segs: 3,
         colBase: cBase,
+        colMid: cMid,
         colTip: cTip
       })
     );
@@ -186,100 +273,259 @@ function create3DGrassTuftGeometry(rng) {
 
 function create3DDianthusTuftGeometry(rng) {
   const parts = [];
-  const cLeafBase = new T.Color('#3b5946');
-  const cLeafTip = new T.Color('#7ca382');
-  const cPetalOuter = new T.Color('#f4c4d8');
-  const cPetalCenter = new T.Color('#a33860');
+  const cLeafBase = new T.Color('#314f40');
+  const cLeafMid = new T.Color('#5c876c');
+  const cLeafTip = new T.Color('#8eb596');
+  const cPetalCenter = new T.Color('#9e2b5e');
+  const cPetalOuter = new T.Color('#f9c8de');
+  const cGoldenCenter = new T.Color('#ffe082');
 
-  // Low glaucous grass cushion
-  for (let i = 0; i < 8; i++) {
-    const yaw = (i / 8) * Math.PI * 2 + (rng() - 0.5) * 0.35;
-    const rad = 0.03 + rng() * 0.12;
+  // Rich glaucous basal grass cushion
+  for (let i = 0; i < 10; i++) {
+    const yaw = (i / 10) * Math.PI * 2 + (rng() - 0.5) * 0.35;
+    const rad = 0.025 + rng() * 0.13;
     parts.push(
       buildBladeGeometry({
-        baseW: 0.028 + rng() * 0.01,
-        height: 0.22 + rng() * 0.14,
-        bend: 0.1 + rng() * 0.1,
+        baseW: 0.026 + rng() * 0.01,
+        height: 0.22 + rng() * 0.16,
+        bend: 0.11 + rng() * 0.11,
         yaw,
         lean: 0.05 + rng() * 0.06,
         ox: Math.cos(yaw) * rad,
         oz: Math.sin(yaw) * rad,
-        segs: 1,
+        segs: 2,
         colBase: cLeafBase,
+        colMid: cLeafMid,
         colTip: cLeafTip
       })
     );
   }
 
-  // Slender flowering stems topped by 5-petal cupped pink Dianthus blooms
-  const stemCount = 4;
+  // Slender flowering stems topped by 5-petal cupped 3D Dianthus blooms + golden center bud
+  const stemCount = 6;
+  const petalPos = [];
+  const petalCols = [];
+  const petalIdx = [];
+
   for (let f = 0; f < stemCount; f++) {
-    const ang = (f / stemCount) * Math.PI * 2 + rng() * 0.5;
-    const spread = 0.08 + rng() * 0.11;
-    const h = 0.32 + rng() * 0.16;
+    const ang = (f / stemCount) * Math.PI * 2 + rng() * 0.45;
+    const spread = 0.08 + rng() * 0.12;
+    const h = 0.32 + rng() * 0.18;
     const fx = Math.cos(ang) * spread;
     const fz = Math.sin(ang) * spread;
 
-    // Slim stem
     parts.push(
       buildBladeGeometry({
         baseW: 0.011,
         height: h,
-        bend: spread * 0.5,
+        bend: spread * 0.55,
         yaw: ang,
-        lean: spread * 0.4,
+        lean: spread * 0.42,
         ox: fx * 0.25,
         oz: fz * 0.25,
-        segs: 1,
+        segs: 2,
         colBase: cLeafBase,
+        colMid: cLeafMid,
         colTip: cLeafTip
       })
     );
 
-    // 5-petal Dianthus blossom head at stem tip
-    const tipZ = spread * 0.9;
+    const tipZ = spread * 0.97;
+    const cosA = Math.cos(ang);
+    const sinA = Math.sin(ang);
+    const flowerX = fx * 0.25 - tipZ * sinA;
+    const flowerZ = fz * 0.25 + tipZ * cosA;
+    const flowerY = h + 0.008;
+
+    for (let p = 0; p < 5; p++) {
+      const pa = (p / 5) * Math.PI * 2 + f * 0.42;
+      appendCuppedPetal(
+        petalPos,
+        petalCols,
+        petalIdx,
+        flowerX,
+        flowerY,
+        flowerZ,
+        pa,
+        0.056 + (p % 2) * 0.008,
+        0.044,
+        0.016,
+        0.18,
+        cPetalCenter,
+        cPetalOuter
+      );
+    }
+
+    const bud = new T.OctahedronGeometry(0.014, 0);
+    bud.translate(flowerX, flowerY + 0.01, flowerZ);
+    parts.push(makeColoredGeo(bud, cGoldenCenter));
+  }
+
+  const fg = new T.BufferGeometry();
+  fg.setAttribute('position', new T.Float32BufferAttribute(petalPos, 3));
+  fg.setAttribute('color', new T.Float32BufferAttribute(petalCols, 3));
+  fg.setIndex(petalIdx);
+  fg.computeVertexNormals();
+  parts.push(fg);
+
+  return mergeColorGeometries(parts);
+}
+
+function create3DWildflowerClusterGeometry(rng) {
+  const parts = [];
+  const cLeafBase = new T.Color('#314f38');
+  const cLeafMid = new T.Color('#527c54');
+  const cLeafTip = new T.Color('#7ba672');
+  const cBellBase = new T.Color('#8a56d6');
+  const cBellTip = new T.Color('#d8b8ff');
+  const cBellGold = new T.Color('#ffd978');
+  const cJasInner = new T.Color('#f2e7dc');
+  const cJasOuter = new T.Color('#fffaf4');
+  const cJasHeart = new T.Color('#ffb757');
+
+  for (let i = 0; i < 8; i++) {
+    const yaw = (i / 8) * Math.PI * 2 + (rng() - 0.5) * 0.4;
+    const rad = 0.03 + rng() * 0.1;
+    parts.push(
+      buildBladeGeometry({
+        baseW: 0.025,
+        height: 0.22 + rng() * 0.12,
+        bend: 0.12,
+        yaw,
+        lean: 0.06,
+        ox: Math.cos(yaw) * rad,
+        oz: Math.sin(yaw) * rad,
+        segs: 2,
+        colBase: cLeafBase,
+        colMid: cLeafMid,
+        colTip: cLeafTip
+      })
+    );
+  }
+
+  const petalPos = [];
+  const petalCols = [];
+  const petalIdx = [];
+
+  // 4 twilight lavender-amethyst bellflowers + 3 star-jasmine cream blossoms
+  for (let s = 0; s < 7; s++) {
+    const isBell = s < 4;
+    const ang = (s / 7) * Math.PI * 2 + rng() * 0.4;
+    const spread = 0.07 + rng() * 0.1;
+    const h = (isBell ? 0.34 : 0.27) + rng() * 0.14;
+    const fx = Math.cos(ang) * spread;
+    const fz = Math.sin(ang) * spread;
+
+    parts.push(
+      buildBladeGeometry({
+        baseW: 0.01,
+        height: h,
+        bend: spread * 0.55,
+        yaw: ang,
+        lean: spread * 0.45,
+        ox: fx * 0.25,
+        oz: fz * 0.25,
+        segs: 2,
+        colBase: cLeafBase,
+        colMid: cLeafMid,
+        colTip: cLeafTip
+      })
+    );
+
+    const tipZ = spread;
     const cosA = Math.cos(ang);
     const sinA = Math.sin(ang);
     const flowerX = fx * 0.25 - tipZ * sinA;
     const flowerZ = fz * 0.25 + tipZ * cosA;
     const flowerY = h + 0.01;
 
-    const petalPos = [];
-    const petalCols = [];
-    const petalIdx = [];
-    const petals = 5;
-    for (let p = 0; p < petals; p++) {
-      const pa = (p / petals) * Math.PI * 2 + f * 0.4;
-      const rIn = 0.01;
-      const rOut = 0.056 + (p % 2) * 0.008;
-      const wHalf = 0.026;
-      const pCos = Math.cos(pa);
-      const pSin = Math.sin(pa);
-
-      const x0 = flowerX + pCos * rIn;
-      const z0 = flowerZ + pSin * rIn;
-      const x1 = flowerX + pCos * rOut - pSin * wHalf;
-      const z1 = flowerZ + pSin * rOut + pCos * wHalf;
-      const x2 = flowerX + pCos * rOut + pSin * wHalf;
-      const z2 = flowerZ + pSin * rOut - pCos * wHalf;
-      const yCup = flowerY + 0.014;
-
-      const base = p * 3;
-      petalPos.push(x0, flowerY, z0, x1, yCup, z1, x2, yCup, z2);
-      petalCols.push(
-        cPetalCenter.r, cPetalCenter.g, cPetalCenter.b,
-        cPetalOuter.r, cPetalOuter.g, cPetalOuter.b,
-        cPetalOuter.r, cPetalOuter.g, cPetalOuter.b
+    const nPetals = isBell ? 6 : 5;
+    for (let p = 0; p < nPetals; p++) {
+      const pa = (p / nPetals) * Math.PI * 2 + s * 0.5;
+      appendCuppedPetal(
+        petalPos,
+        petalCols,
+        petalIdx,
+        flowerX,
+        flowerY,
+        flowerZ,
+        pa,
+        isBell ? 0.06 : 0.05,
+        isBell ? 0.038 : 0.03,
+        isBell ? 0.026 : 0.012,
+        isBell ? 0.34 : 0.12,
+        isBell ? cBellBase : cJasInner,
+        isBell ? cBellTip : cJasOuter
       );
-      petalIdx.push(base, base + 1, base + 2);
     }
-    const fg = new T.BufferGeometry();
-    fg.setAttribute('position', new T.Float32BufferAttribute(petalPos, 3));
-    fg.setAttribute('color', new T.Float32BufferAttribute(petalCols, 3));
-    fg.setIndex(petalIdx);
-    fg.computeVertexNormals();
-    parts.push(fg);
+
+    const heart = new T.OctahedronGeometry(0.014, 0);
+    heart.translate(flowerX, flowerY + 0.012, flowerZ);
+    parts.push(makeColoredGeo(heart, isBell ? cBellGold : cJasHeart));
   }
+
+  const fg = new T.BufferGeometry();
+  fg.setAttribute('position', new T.Float32BufferAttribute(petalPos, 3));
+  fg.setAttribute('color', new T.Float32BufferAttribute(petalCols, 3));
+  fg.setIndex(petalIdx);
+  fg.computeVertexNormals();
+  parts.push(fg);
+
+  return mergeColorGeometries(parts);
+}
+
+function create3DShrubBlossomGeometry(rng) {
+  const petalPos = [];
+  const petalCols = [];
+  const petalIdx = [];
+  const parts = [];
+  const palette = [
+    [new T.Color('#d16b9c'), new T.Color('#f7bfd7')],
+    [new T.Color('#a470cf'), new T.Color('#e6c9ff')],
+    [new T.Color('#e2b6cd'), new T.Color('#fff0f7')]
+  ];
+  const centerGold = new T.Color('#ffe088');
+
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * Math.PI * 2 + rng() * 0.5;
+    const elev = 0.25 + rng() * 0.9;
+    const r = 0.24 + Math.cos(elev) * 0.2;
+    const fx = Math.cos(a) * r;
+    const fy = 0.44 + Math.sin(elev) * 0.28;
+    const fz = Math.sin(a) * r;
+    const [cIn, cOut] = palette[i % palette.length];
+
+    for (let p = 0; p < 4; p++) {
+      const pa = (p / 4) * Math.PI * 2 + i * 0.7;
+      appendCuppedPetal(
+        petalPos,
+        petalCols,
+        petalIdx,
+        fx,
+        fy,
+        fz,
+        pa,
+        0.068,
+        0.056,
+        0.014,
+        0.16,
+        cIn,
+        cOut
+      );
+    }
+    if (i % 2 === 0) {
+      const c = new T.OctahedronGeometry(0.013, 0);
+      c.translate(fx, fy + 0.01, fz);
+      parts.push(makeColoredGeo(c, centerGold));
+    }
+  }
+
+  const fg = new T.BufferGeometry();
+  fg.setAttribute('position', new T.Float32BufferAttribute(petalPos, 3));
+  fg.setAttribute('color', new T.Float32BufferAttribute(petalCols, 3));
+  fg.setIndex(petalIdx);
+  fg.computeVertexNormals();
+  parts.push(fg);
 
   return mergeColorGeometries(parts);
 }
@@ -395,10 +641,11 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
 
     const dPath = Math.abs(vx - pathX(vz));
     const dPond = pondDistance(vx, vz);
-    const pathFactor = 1 - T.MathUtils.smoothstep(dPath, 0.85, 2.3);
+    const pathFactor = vz >= -41.5 ? 1 - T.MathUtils.smoothstep(dPath, 0.85, 2.3) : 0;
     const shoreFactor = 1 - T.MathUtils.smoothstep(dPond, 5.2, 6.9);
     const pavFactor = 1 - T.MathUtils.smoothstep(Math.hypot(vx + 4.2, vz + 14.2), 2.5, 4.4);
-    const sMix = Math.min(1, Math.max(pathFactor * 0.92, shoreFactor, pavFactor * 0.75));
+    const shrineFactor = 1 - T.MathUtils.smoothstep(Math.hypot(vx, vz + 41.0), 2.3, 3.9);
+    const sMix = Math.min(1, Math.max(pathFactor * 0.92, shoreFactor, pavFactor * 0.75, shrineFactor * 0.85));
     soilMix[i] = sMix;
 
     const patchNoise = Math.sin(vx * 0.25) * Math.cos(vz * 0.22) * 0.5 + 0.5;
@@ -453,7 +700,7 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
   scene.add(stonesGroup);
 
   const stoneRecords = [];
-  for (let z = 23.2; z > -35.8; z -= 1.05) {
+  for (let z = 23.2; z > -38.8; z -= 1.02) {
     const cx = pathX(z);
     // 2 staggered main flagstones across path width + occasional center bridge stone
     const offsets = Math.floor(z * 10) % 2 === 0 ? [-0.62, 0.58] : [-0.75, 0.02, 0.72];
@@ -473,6 +720,21 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
       stonesGroup.add(m);
       stoneRecords.push({ x: sx, z: sz });
     }
+  }
+  // Circular sanctuary flagstone ring encircling the Hero Blossom Shrine at the end of the path (0, -41.0)
+  for (let k = 0; k < 10; k++) {
+    const a = (k / 10) * Math.PI * 2;
+    const sx = Math.cos(a) * 2.55;
+    const sz = -41.0 + Math.sin(a) * 2.55;
+    const sy = getTerrainHeight(sx, sz);
+    const geo = stoneVariations[k % stoneVariations.length];
+    const m = new T.Mesh(geo, k % 2 === 0 ? materials.stoneMat : materials.stoneDarkMat);
+    m.position.set(sx, sy - 0.024, sz);
+    m.rotation.y = a + 0.3;
+    m.scale.set(0.92, 1.0, 0.88);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    stonesGroup.add(m);
   }
   batchStaticGroup(stonesGroup);
 
@@ -509,12 +771,13 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
   }
 
   // Garden border & foreground framing boulders
-  for (let i = 0; i < 56; i++) {
-    const z = 22.5 - rng() * 58;
+  for (let i = 0; i < 60; i++) {
+    const z = 22.5 - rng() * 67;
     const side = i % 2 === 0 ? -1 : 1;
     const x = pathX(z) + side * (2.6 + rng() * 11.5);
     if (pondDistance(x, z) < 6.4) continue;
     if (Math.hypot(x + 4.2, z + 14.2) < 3.9) continue;
+    if (Math.hypot(x, z + 41.0) < 3.2) continue;
     if (nearLandmark(x, z, 1.9)) continue;
     const y = getTerrainHeight(x, z);
     const sx = 0.4 + rng() * 0.95;
@@ -550,46 +813,76 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
     scene.add(im);
   });
 
-  // 4. Sculpted 3D Grass Blades & Pink Dianthus Flower Grass Tufts (no flat cards!)
+  // 4. Sculpted V-Creased 3D Grass, Cupped 3D Dianthus & Botanical Wildflower Clusters
   const grassPositions = [];
   const dianthusPositions = [];
-  for (let i = 0; i < 920; i++) {
-    const z = 24 - rng() * 61;
+  const wildflowerPositions = [];
+  for (let i = 0; i < 1250; i++) {
+    const z = 24 - rng() * 69;
     const side = rng() > 0.5 ? 1 : -1;
-    const borderBias = rng() < 0.65 ? 1.48 + rng() * 2.4 : 3.2 + rng() * 11.5;
+    const borderBias = rng() < 0.66 ? 1.44 + rng() * 2.45 : 3.2 + rng() * 11.5;
     const x = pathX(z) + side * borderBias;
     if (pondDistance(x, z) < 5.3) continue;
     if (Math.hypot(x + 4.2, z + 14.2) < 3.4) continue;
+    if (Math.hypot(x, z + 41.0) < 2.65) continue;
     if (nearLandmark(x, z, 1.15)) continue;
     const y = getTerrainHeight(x, z);
     const entry = {
       x,
       y: y - 0.025,
       z,
-      s: 0.72 + rng() * 0.58,
+      s: 0.76 + rng() * 0.62,
       rot: rng() * Math.PI * 2,
-      tint: 0.82 + rng() * 0.28
+      tint: 0.84 + rng() * 0.28
     };
-    if (borderBias < 3.4 && i % 4 === 0) dianthusPositions.push(entry);
+    if (borderBias < 3.5 && i % 4 === 0) dianthusPositions.push(entry);
     else grassPositions.push(entry);
   }
-  // Extra ring of lush grass & pink Dianthus flowers right along the pond shoreline
-  for (let i = 0; i < 220; i++) {
+  // Pathside & shrine-ringed Twilight Bellflower + Star-Jasmine clusters
+  for (let i = 0; i < 240; i++) {
+    const z = 23.0 - rng() * 66;
+    const side = rng() > 0.5 ? 1 : -1;
+    const dist = 1.44 + rng() * 2.35;
+    const x = pathX(z) + side * dist;
+    if (pondDistance(x, z) < 5.35) continue;
+    if (Math.hypot(x + 4.2, z + 14.2) < 3.4) continue;
+    if (Math.hypot(x, z + 41.0) < 2.65) continue;
+    if (nearLandmark(x, z, 1.2)) continue;
+    wildflowerPositions.push({
+      x,
+      y: getTerrainHeight(x, z) - 0.02,
+      z,
+      s: 0.85 + rng() * 0.58,
+      rot: rng() * Math.PI * 2,
+      tint: 0.88 + rng() * 0.22
+    });
+  }
+  // Extra ring of lush grass, pink Dianthus & wildflower clusters right around pond shore + Blossom Shrine plaza
+  for (let i = 0; i < 260; i++) {
     const a = rng() * Math.PI * 2;
-    const rad = 5.42 + rng() * 1.38;
-    const x = -10.6 + Math.cos(a) * rad * (1 + Math.sin(a * 2 + 0.6) * 0.11);
-    const z = -2.2 + Math.sin(a) * rad * 1.32 * (1 + Math.cos(a * 3 - 0.4) * 0.07);
-    if (Math.abs(x - pathX(z)) < 1.35) continue;
+    const isShrineRing = i >= 195;
+    let x, z;
+    if (isShrineRing) {
+      const r = 2.85 + rng() * 2.9;
+      x = Math.cos(a) * r;
+      z = -41.0 + Math.sin(a) * r;
+    } else {
+      const rad = 5.42 + rng() * 1.38;
+      x = -10.6 + Math.cos(a) * rad * (1 + Math.sin(a * 2 + 0.6) * 0.11);
+      z = -2.2 + Math.sin(a) * rad * 1.32 * (1 + Math.cos(a * 3 - 0.4) * 0.07);
+      if (Math.abs(x - pathX(z)) < 1.35) continue;
+    }
     const y = getTerrainHeight(x, z);
     const entry = {
       x,
-      y: y - 0.03,
+      y: y - 0.028,
       z,
-      s: 0.78 + rng() * 0.65,
+      s: 0.82 + rng() * 0.62,
       rot: rng() * Math.PI * 2,
-      tint: 0.85 + rng() * 0.24
+      tint: 0.86 + rng() * 0.24
     };
-    if (i % 3 === 0) dianthusPositions.push(entry);
+    if (i % 4 === 0) wildflowerPositions.push(entry);
+    else if (i % 3 === 0) dianthusPositions.push(entry);
     else grassPositions.push(entry);
   }
 
@@ -599,7 +892,7 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
   grassPositions.forEach((g, i) => {
     dummy.position.set(g.x, g.y, g.z);
     dummy.rotation.set(0, g.rot, 0);
-    dummy.scale.set(g.s, g.s * (0.85 + rng() * 0.35), g.s);
+    dummy.scale.set(g.s, g.s * (0.88 + rng() * 0.34), g.s);
     dummy.updateMatrix();
     grassInst.setMatrixAt(i, dummy.matrix);
     grassInst.setColorAt(i, new T.Color(g.tint, g.tint * 1.03, g.tint * 0.94));
@@ -612,21 +905,35 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
   dianthusPositions.forEach((g, i) => {
     dummy.position.set(g.x, g.y, g.z);
     dummy.rotation.set(0, g.rot, 0);
-    dummy.scale.set(g.s * 1.05, g.s * (0.9 + rng() * 0.3), g.s * 1.05);
+    dummy.scale.set(g.s * 1.08, g.s * (0.92 + rng() * 0.28), g.s * 1.08);
     dummy.updateMatrix();
     dianthusInst.setMatrixAt(i, dummy.matrix);
     dianthusInst.setColorAt(i, new T.Color(g.tint, g.tint * 0.98, g.tint));
   });
   scene.add(dianthusInst);
 
-  // 5. Hydrangea & garden foliage shrubs along foreground, path bends & pond edge
+  const wildflowerGeo = create3DWildflowerClusterGeometry(rng);
+  const wildflowerInst = new T.InstancedMesh(wildflowerGeo, materials.foliage3DMat, wildflowerPositions.length);
+  wildflowerInst.receiveShadow = false;
+  wildflowerPositions.forEach((g, i) => {
+    dummy.position.set(g.x, g.y, g.z);
+    dummy.rotation.set(0, g.rot, 0);
+    dummy.scale.set(g.s * 1.06, g.s * (0.94 + rng() * 0.28), g.s * 1.06);
+    dummy.updateMatrix();
+    wildflowerInst.setMatrixAt(i, dummy.matrix);
+    wildflowerInst.setColorAt(i, new T.Color(g.tint, g.tint * 0.97, g.tint * 1.04));
+  });
+  scene.add(wildflowerInst);
+
+  // 5. Hydrangea & garden foliage shrubs + 3D flower domes along foreground, path bends, pond & shrine
   const shrubPositions = [];
-  for (let i = 0; i < 210; i++) {
-    const z = 23.5 - rng() * 59;
+  for (let i = 0; i < 230; i++) {
+    const z = 23.5 - rng() * 68;
     const side = rng() > 0.5 ? 1 : -1;
     const x = pathX(z) + side * (2.25 + rng() * 9.5);
     if (pondDistance(x, z) < 5.7) continue;
     if (Math.hypot(x + 4.2, z + 14.2) < 3.8) continue;
+    if (Math.hypot(x, z + 41.0) < 3.4) continue;
     if (nearLandmark(x, z, 1.55)) continue;
     const y = getTerrainHeight(x, z);
     shrubPositions.push({
@@ -652,14 +959,27 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
   });
   scene.add(shrubInst);
 
+  const shrubBloomGeo = create3DShrubBlossomGeometry(rng);
+  const shrubBloomInst = new T.InstancedMesh(shrubBloomGeo, materials.foliage3DMat, shrubPositions.length);
+  shrubBloomInst.receiveShadow = false;
+  shrubPositions.forEach((s, i) => {
+    dummy.position.set(s.x, s.y, s.z);
+    dummy.rotation.set(0, s.rot + 0.6, 0);
+    dummy.scale.set(s.s, s.s * 0.96, s.s);
+    dummy.updateMatrix();
+    shrubBloomInst.setMatrixAt(i, dummy.matrix);
+    shrubBloomInst.setColorAt(i, new T.Color(0.95 + rng() * 0.12, 0.92 + rng() * 0.12, 0.98 + rng() * 0.1));
+  });
+  scene.add(shrubBloomInst);
+
   // 6. Fallen cherry blossom petal carpet tucked between path stones & tree bases
-  const petalCarpetCount = 480;
+  const petalCarpetCount = 540;
   const petalGeo = new T.PlaneGeometry(0.13, 0.13);
   petalGeo.rotateX(-Math.PI / 2);
   const petalCarpet = new T.InstancedMesh(petalGeo, materials.cherryPetalMat, petalCarpetCount);
   for (let i = 0; i < petalCarpetCount; i++) {
-    const z = 23.5 - rng() * 59;
-    const x = pathX(z) + (rng() - 0.5) * 4.8;
+    const z = 23.5 - rng() * 68;
+    const x = pathX(z) + (rng() - 0.5) * 5.2;
     const y = getTerrainHeight(x, z);
     if (y < -0.02) {
       dummy.scale.setScalar(0.001);
@@ -779,5 +1099,5 @@ export function buildTerrainAndFoliage(scene, lib, landmarkCoords = []) {
     scene.add(sideR);
   }
 
-  return { grassInst, dianthusInst, shrubInst };
+  return { grassInst, dianthusInst, wildflowerInst, shrubInst, shrubBloomInst };
 }

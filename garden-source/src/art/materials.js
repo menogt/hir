@@ -47,7 +47,11 @@ export function createMaterialLibrary(renderer) {
     return tex;
   }
 
-  function applyWindSway(material, { heightStart = 0.0, amp = 0.06, speed = 1.6 } = {}) {
+  function applyWindSway(material, { heightStart = 0.0, amp = 0.06, speed = 1.6, usePosY = false } = {}) {
+    material.customProgramCacheKey = () => `wind-${heightStart}-${amp}-${speed}-${usePosY ? 1 : 0}`;
+    const wExpr = usePosY
+      ? `clamp(position.y, 0.0, 1.0)`
+      : `max(0.0, uv.y - ${heightStart.toFixed(2)})`;
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = windUniforms.uTime;
       shader.uniforms.uWindAmp = windUniforms.uWindAmp;
@@ -56,7 +60,7 @@ export function createMaterialLibrary(renderer) {
         shader.vertexShader.replace(
           '#include <begin_vertex>',
           `#include <begin_vertex>
-          float wFactor = max(0.0, uv.y - ${heightStart.toFixed(2)});
+          float wFactor = ${wExpr};
           vec4 wp = vec4(transformed, 1.0);
           #ifdef USE_INSTANCING
             wp = instanceMatrix * wp;
@@ -163,12 +167,12 @@ export function createMaterialLibrary(renderer) {
 
   const blossomCardMat = new T.MeshStandardMaterial({
     map: blossomTex,
-    alphaTest: 0.36,
+    alphaTest: 0.32,
     side: T.DoubleSide,
-    roughness: 0.86,
+    roughness: 0.68,
     metalness: 0.0,
-    emissive: new T.Color('#8c4f67'),
-    emissiveIntensity: 0.32
+    emissive: new T.Color('#965274'),
+    emissiveIntensity: 0.36
   });
   applyWindSway(blossomCardMat, { heightStart: 0.15, amp: 0.05, speed: 1.4 });
 
@@ -193,10 +197,12 @@ export function createMaterialLibrary(renderer) {
   const foliage3DMat = new T.MeshStandardMaterial({
     vertexColors: true,
     side: T.DoubleSide,
-    roughness: 0.76,
-    metalness: 0.02
+    roughness: 0.58,
+    metalness: 0.03,
+    emissive: new T.Color('#19241b'),
+    emissiveIntensity: 0.16
   });
-  applyWindSway(foliage3DMat, { heightStart: 0.04, amp: 0.068, speed: 1.85 });
+  applyWindSway(foliage3DMat, { heightStart: 0.04, amp: 0.085, speed: 1.85, usePosY: true });
 
   const lilyPadMat = new T.MeshStandardMaterial({
     map: lilyPadTex,

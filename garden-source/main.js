@@ -189,8 +189,8 @@ const {
   halo: shrineHalo,
   pollenMotes,
   shrineLight
-} = buildBlossomShrine(scene, lib, 0.0, -30.0);
-colliders.push({ x: 0.0, z: -30.0, r: 1.72 });
+} = buildBlossomShrine(scene, lib, 0.0, -41.0);
+colliders.push({ x: 0.0, z: -41.0, r: 1.72 });
 if (shrineLight) virtualLights.push(shrineLight);
 
 // Mood-Adaptive Fluttering Butterflies (Golden Hour & Twilight)
@@ -362,7 +362,7 @@ const wisps = [];
 for (let i = 0; i < 32; i++) {
   const isPond = i < 12;
   const wx = isPond ? -10.4 + (rng() - 0.5) * 8.5 : (rng() - 0.5) * 20;
-  const wz = isPond ? -2.2 + (rng() - 0.5) * 10.5 : 21 - rng() * 56;
+  const wz = isPond ? -2.2 + (rng() - 0.5) * 10.5 : 21 - rng() * 66;
   const wy = Math.max(0.2, getTerrainHeight(wx, wz)) + 0.45 + rng() * 1.7;
   const sp = new T.Sprite(
     new T.SpriteMaterial({
@@ -401,7 +401,7 @@ const petalData = Array.from({ length: maxPetals }, (_, idx) => {
   return {
     x: (rng() - 0.5) * 24,
     y: 0.4 + rng() * 8.2,
-    z: 22 - rng() * 58,
+    z: 22 - rng() * 68,
     vx: (rng() - 0.5) * 0.45,
     vy: 0.45 + rng() * 0.35,
     theta: rng() * Math.PI * 2,
@@ -1244,7 +1244,7 @@ function checkTrailComplete() {
   ) {
     trailCompleteTriggered = true;
     opening = 1;
-    triggerDiscoveryBurst(0, getTerrainHeight(0, -30) + 0.6, -30);
+    triggerDiscoveryBurst(0, getTerrainHeight(0, -41) + 0.6, -41);
     chime([392, 493.88, 587.33, 659.25, 783.99, 987.77]);
     showRpgBanner('TRAIL COMPLETE', 'Every Memory Unlocked ✿');
     showStatusToast('✿ You walked through every memory in the garden.', 6200);
@@ -1622,7 +1622,7 @@ const scoredLights = virtualLights.map((vl) => {
 {
   const firstUnvisited = publicMemories.find((m) => !foundMemories.has(m.id));
   const gx = firstUnvisited ? firstUnvisited.location.x : 0;
-  const gz = firstUnvisited ? firstUnvisited.location.z : -30;
+  const gz = firstUnvisited ? firstUnvisited.location.z : -41;
   guideOrb.position.set(gx, getTerrainHeight(gx, gz) + 1.55, gz);
 }
 const guideTargetVec = new T.Vector3();
@@ -1650,7 +1650,7 @@ function drawMinimap(t, nextRingIdx) {
   const h = minimapCanvas.height;
   const cx = w * 0.5;
   const cy = h * 0.5;
-  const scale = 2.65; // pixels per world meter
+  const scale = 2.25; // pixels per world meter
 
   minimapCtx.clearRect(0, 0, w, h);
 
@@ -1685,7 +1685,7 @@ function drawMinimap(t, nextRingIdx) {
   minimapCtx.lineWidth = 3;
   minimapCtx.lineCap = 'round';
   minimapCtx.beginPath();
-  for (let wz = 22; wz >= -35; wz -= 2) {
+  for (let wz = 22; wz >= -41; wz -= 2) {
     const mx = toMapX(pathX(wz));
     const my = toMapY(wz);
     if (wz === 22) minimapCtx.moveTo(mx, my);
@@ -1817,7 +1817,7 @@ function frame(now) {
       velocity.z = T.MathUtils.lerp(velocity.z, targetVz, accel);
 
       const nx = T.MathUtils.clamp(player.position.x + velocity.x * dt, -16, 16);
-      const nz = T.MathUtils.clamp(player.position.z + velocity.z * dt, -37.5, 24);
+      const nz = T.MathUtils.clamp(player.position.z + velocity.z * dt, -43.5, 24);
       const blocked =
         colliders.some((c) => Math.hypot(nx - c.x, nz - c.z) < c.r + 0.28) ||
         pondDistance(nx, nz) < 5.35;
@@ -1899,7 +1899,7 @@ function frame(now) {
   const nextMemIdx = publicMemories.findIndex((m) => !foundMemories.has(m.id));
   let guideRingIdx = -1;
   let gx = 0;
-  let gz = -30;
+  let gz = -41;
   let questTargetNode = null;
   let questTargetLabel = '04 · The Blossom Grove';
   if (nextMemIdx >= 0) {
@@ -2137,7 +2137,7 @@ function frame(now) {
         if (p.restTimer <= 0) {
           p.x = (rng() - 0.5) * 24;
           p.y = 6.2 + rng() * 3.0;
-          p.z = 22 - rng() * 58;
+          p.z = 22 - rng() * 68;
           p.theta = rng() * Math.PI * 2;
           p.phi = rng() * Math.PI * 2;
         }

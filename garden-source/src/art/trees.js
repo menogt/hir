@@ -59,22 +59,72 @@ function createTaperedSplineTube(points, tubularSegs, radialSegs, rStart, rEnd, 
 }
 
 function createBlossomClusterGeometry() {
-  // 3 intersecting slightly-tilted foliage planes for volumetric silhouette from any angle
-  const planes = [];
+  // Multi-card curved dome cluster + 3D 5-petal blossom florets with sphericalized normals
+  const pieces = [];
   const angles = [
-    [0, 0, 0],
-    [0.24, Math.PI / 3, 0.16],
-    [-0.22, -Math.PI / 3, -0.14]
+    [0, 0, 0, 0, 0, 0],
+    [0.26, Math.PI / 3, 0.18, 0.18, 0.08, -0.12],
+    [-0.24, -Math.PI / 3, -0.16, -0.18, 0.06, 0.14],
+    [0.42, Math.PI * 0.68, -0.22, 0.08, -0.1, 0.2],
+    [-0.38, -Math.PI * 0.72, 0.2, -0.12, 0.12, -0.18],
+    [Math.PI * 0.42, 0.25, 0.15, 0, 0.24, 0]
   ];
-  for (const [rx, ry, rz] of angles) {
-    const p = new T.PlaneGeometry(1.45, 1.35);
+  for (const [rx, ry, rz, tx, ty, tz] of angles) {
+    const p = new T.PlaneGeometry(1.38, 1.28, 3, 3);
+    const pos = p.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const px = pos.getX(i) / 0.69;
+      const py = pos.getY(i) / 0.64;
+      const r2 = Math.min(1, (px * px + py * py) * 0.65);
+      // Natural dome cupping across each blossom cluster layer
+      pos.setZ(i, 0.2 * (1 - r2));
+    }
+    p.computeVertexNormals();
     p.rotateX(rx);
     p.rotateY(ry);
     p.rotateZ(rz);
-    planes.push(p);
+    p.translate(tx, ty, tz);
+    pieces.push(p);
   }
-  const merged = mergeGeometries(planes, false);
-  planes.forEach((p) => p.dispose());
+
+  // Sculpted 3D sakura rosette accents peeking from outer cluster surfaces
+  const lookVec = new T.Vector3();
+  for (let r = 0; r < 6; r++) {
+    const theta = (r / 6) * Math.PI * 2 + 0.4;
+    const phi = 0.45 + (r % 2) * 0.42;
+    const dist = 0.56;
+    const rosette = new T.CircleGeometry(0.16, 5);
+    const rPos = rosette.attributes.position;
+    for (let i = 1; i < rPos.count; i++) {
+      // Cup outer petal ring forward
+      rPos.setZ(i, 0.045);
+    }
+    rosette.computeVertexNormals();
+    lookVec.set(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta));
+    rosette.lookAt(lookVec);
+    rosette.translate(
+      Math.sin(phi) * Math.cos(theta) * dist,
+      Math.cos(phi) * dist * 0.65,
+      Math.sin(phi) * Math.sin(theta) * dist
+    );
+    pieces.push(rosette);
+  }
+
+  const merged = mergeGeometries(pieces, false);
+  pieces.forEach((p) => p.dispose());
+
+  // Sphericalized vertex normal pass eliminates flat card intersection seams
+  const pos = merged.attributes.position;
+  const norm = merged.attributes.normal;
+  const v = new T.Vector3();
+  const n = new T.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.set(pos.getX(i), pos.getY(i) + 0.15, pos.getZ(i));
+    if (v.lengthSq() > 1e-5) v.normalize();
+    else v.set(0, 1, 0);
+    n.fromBufferAttribute(norm, i).lerp(v, 0.82).normalize();
+    norm.setXYZ(i, n.x, n.y, n.z);
+  }
   return merged;
 }
 
@@ -100,21 +150,21 @@ export function buildSakuraTrees(scene, lib) {
     );
     const p3 = new T.Vector3(x + leanX, baseY + hTrunk, z + leanZ);
 
-    const mainTrunk = createTaperedSplineTube([p0, p1, p2, p3], 10, hero ? 9 : 7, rBase, rBase * 0.42, 0.1);
-    trunkGeos.push(mainTrunk.toNonIndexed());
+    const mainTrunk = createTaperedSplineTube([p0, p1, p2, p3], 14, hero ? 12 : 9, rBase, rBase * 0.42, 0.1);
+    trunkGeos.push(mainTrunk);
 
-    // 4 flared root buttresses gripping the earth
+    // Flared root buttresses gripping the earth
     const rootCount = hero ? 5 : 4;
     for (let r = 0; r < rootCount; r++) {
       const a = (r / rootCount) * Math.PI * 2 + rng() * 0.5;
-      const rLen = (0.75 + rng() * 0.55) * scale;
+      const rLen = (0.78 + rng() * 0.55) * scale;
       const rp0 = new T.Vector3(x + Math.cos(a) * rBase * 0.45, baseY + 0.65 * scale, z + Math.sin(a) * rBase * 0.45);
       const rp1 = new T.Vector3(x + Math.cos(a) * rLen * 0.65, baseY + 0.18 * scale, z + Math.sin(a) * rLen * 0.65);
       const rp2 = new T.Vector3(x + Math.cos(a) * rLen, baseY - 0.16, z + Math.sin(a) * rLen);
-      trunkGeos.push(createTaperedSplineTube([rp0, rp1, rp2], 5, 5, rBase * 0.42, rBase * 0.12, 0.06).toNonIndexed());
+      trunkGeos.push(createTaperedSplineTube([rp0, rp1, rp2], 6, 6, rBase * 0.42, rBase * 0.12, 0.06));
     }
 
-    // Sweeping boughs & forked branches
+    // Sweeping boughs & forked branches + tertiary fine twigs
     const boughCount = hero ? 7 : 5;
     for (let i = 0; i < boughCount; i++) {
       const a = (i / boughCount) * Math.PI * 2 + rng() * 0.55;
@@ -130,10 +180,10 @@ export function buildSakuraTrees(scene, lib) {
         startPt.y + (1.05 + rng() * 1.05) * scale,
         startPt.z + Math.sin(a) * reach
       );
-      const bough = createTaperedSplineTube([startPt, midPt, endPt], 7, 6, rBase * 0.34, rBase * 0.1, 0.05);
-      trunkGeos.push(bough.toNonIndexed());
+      const bough = createTaperedSplineTube([startPt, midPt, endPt], 9, 7, rBase * 0.34, rBase * 0.1, 0.05);
+      trunkGeos.push(bough);
 
-      // Two forked sub-branches per bough
+      // Two forked sub-branches + fine tertiary twig per bough
       for (let f = -1; f <= 1; f += 2) {
         const fa = a + f * (0.48 + rng() * 0.25);
         const fReach = (0.95 + rng() * 0.7) * scale;
@@ -144,21 +194,32 @@ export function buildSakuraTrees(scene, lib) {
           forkStart.z + Math.sin(fa) * fReach
         );
         trunkGeos.push(
-          createTaperedSplineTube([forkStart, forkEnd], 4, 5, rBase * 0.16, rBase * 0.05, 0.02).toNonIndexed()
+          createTaperedSplineTube([forkStart, forkEnd], 5, 6, rBase * 0.16, rBase * 0.05, 0.02)
+        );
+
+        const twigAng = fa + f * (0.45 + rng() * 0.25);
+        const twigStart = forkStart.clone().lerp(forkEnd, 0.58);
+        const twigEnd = new T.Vector3(
+          twigStart.x + Math.cos(twigAng) * 0.52 * scale,
+          twigStart.y + (0.24 + rng() * 0.25) * scale,
+          twigStart.z + Math.sin(twigAng) * 0.52 * scale
+        );
+        trunkGeos.push(
+          createTaperedSplineTube([twigStart, twigEnd], 3, 5, rBase * 0.08, rBase * 0.026, 0.01)
         );
 
         // Layered blossom clusters on fork tips & along bough
-        const clusters = hero ? 6 : 5;
+        const clusters = hero ? 7 : 5;
         for (let c = 0; c < clusters; c++) {
-          const anchor = c < 3 ? forkEnd : endPt;
+          const anchor = c < 3 ? forkEnd : c < 5 ? endPt : twigEnd;
           blossomInstances.push({
-            x: anchor.x + (rng() - 0.5) * 1.35 * scale,
-            y: anchor.y + (rng() - 0.35) * 0.9 * scale,
-            z: anchor.z + (rng() - 0.5) * 1.35 * scale,
-            s: (1.05 + rng() * 0.85) * scale,
+            x: anchor.x + (rng() - 0.5) * 1.28 * scale,
+            y: anchor.y + (rng() - 0.35) * 0.85 * scale,
+            z: anchor.z + (rng() - 0.5) * 1.28 * scale,
+            s: (1.02 + rng() * 0.78) * scale,
             tone: rng(),
             rotY: rng() * Math.PI * 2,
-            tilt: (rng() - 0.5) * 0.35
+            tilt: (rng() - 0.5) * 0.32
           });
         }
       }
@@ -197,8 +258,8 @@ export function buildSakuraTrees(scene, lib) {
     [6.6, -18.4, 1.1, -0.55, -0.2],
     [-6.4, -25.8, 1.18, 0.5, 0.2],
     [6.4, -26.2, 1.15, -0.55, 0.1],
-    [-3.8, -33.6, 1.35, 0.7, -0.2],
-    [4.8, -34.0, 1.32, -0.7, -0.2],
+    [-4.2, -42.4, 1.35, 0.75, -0.2],
+    [4.2, -42.4, 1.32, -0.75, -0.2],
     // Outer depth groves
     [-11.5, 14.5, 1.15, 0.2, 0],
     [11.2, 12.8, 1.2, -0.3, 0],

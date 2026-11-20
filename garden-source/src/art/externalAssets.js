@@ -71,30 +71,32 @@ export async function loadExternalGardenModels(scene, landmarkCoords = []) {
     if (!parts.length) return;
 
     const spots = [];
-    // Lush indigo/cornflower accents around the pond shore
-    for (let i = 0; i < 44; i++) {
+    // Lush indigo/cornflower/violet accents around the pond shore
+    for (let i = 0; i < 56; i++) {
       const a = rng() * Math.PI * 2;
-      const rad = 5.38 + rng() * 1.15;
+      const rad = 5.38 + rng() * 1.25;
       const x = -10.6 + Math.cos(a) * rad * (1 + Math.sin(a * 2 + 0.6) * 0.11);
       const z = -2.2 + Math.sin(a) * rad * 1.32 * (1 + Math.cos(a * 3 - 0.4) * 0.07);
       if (Math.abs(x - pathX(z)) < 1.35) continue;
       if (nearLandmark(x, z, 1.45)) continue;
-      spots.push({ x, y: getTerrainHeight(x, z) - 0.02, z, s: 0.78 + rng() * 0.55, ry: rng() * Math.PI * 2 });
+      spots.push({ x, y: getTerrainHeight(x, z) - 0.02, z, s: 0.78 + rng() * 0.55, ry: rng() * Math.PI * 2, tone: rng() });
     }
-    // Pathside clusters & tree/boulder pockets
-    for (let i = 0; i < 56; i++) {
-      const z = 22.8 - rng() * 58;
+    // Pathside clusters & tree/boulder pockets (extending to end-of-path plaza)
+    for (let i = 0; i < 74; i++) {
+      const z = 22.8 - rng() * 64;
       const side = rng() > 0.5 ? 1 : -1;
-      const dist = 1.52 + rng() * 2.15;
+      const dist = 1.52 + rng() * 2.25;
       const x = pathX(z) + side * dist;
       if (pondDistance(x, z) < 5.35) continue;
       if (Math.hypot(x + 4.2, z + 14.2) < 3.5) continue;
       if (nearLandmark(x, z, 1.35)) continue;
-      spots.push({ x, y: getTerrainHeight(x, z) - 0.02, z, s: 0.72 + rng() * 0.52, ry: rng() * Math.PI * 2 });
+      spots.push({ x, y: getTerrainHeight(x, z) - 0.02, z, s: 0.72 + rng() * 0.52, ry: rng() * Math.PI * 2, tone: rng() });
     }
 
     const combinedMat = new T.Matrix4();
     const partLocal = new T.Matrix4();
+    const bluePalette = [new T.Color('#78b0ff'), new T.Color('#96a4ff'), new T.Color('#b694ff')];
+    const tmpCol = new T.Color();
 
     parts.forEach((p) => {
       const mats = Array.isArray(p.material) ? p.material : [p.material];
@@ -102,10 +104,10 @@ export async function loadExternalGardenModels(scene, landmarkCoords = []) {
         m.alphaTest = 0.36;
         m.transparent = false;
         m.side = T.DoubleSide;
-        m.roughness = 0.68;
+        m.roughness = 0.62;
         if ((m.name || '').toLowerCase().includes('flower')) {
-          m.emissive = new T.Color('#4a7cc7');
-          m.emissiveIntensity = 0.35;
+          m.emissive = new T.Color('#5b7ae0');
+          m.emissiveIntensity = 0.4;
         }
         applyFoliageWind(m, 0.045, Math.max(0.2, size.y));
       });
@@ -115,6 +117,7 @@ export async function loadExternalGardenModels(scene, landmarkCoords = []) {
       im.receiveShadow = false;
 
       partLocal.multiplyMatrices(anchorMat, p.localMatrix);
+      const isFlowerMesh = mats.some((m) => (m.name || '').toLowerCase().includes('flower'));
       spots.forEach((s, idx) => {
         dummy.position.set(s.x, s.y, s.z);
         dummy.rotation.set((rng() - 0.5) * 0.08, s.ry, (rng() - 0.5) * 0.08);
@@ -122,7 +125,12 @@ export async function loadExternalGardenModels(scene, landmarkCoords = []) {
         dummy.updateMatrix();
         combinedMat.multiplyMatrices(dummy.matrix, partLocal);
         im.setMatrixAt(idx, combinedMat);
+        if (isFlowerMesh) {
+          tmpCol.copy(bluePalette[idx % bluePalette.length]).multiplyScalar(0.92 + s.tone * 0.18);
+          im.setColorAt(idx, tmpCol);
+        }
       });
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
       scene.add(im);
     });
   };
@@ -172,8 +180,28 @@ export async function loadExternalGardenModels(scene, landmarkCoords = []) {
 
     treeObj.traverse((c) => {
       if (!c.isMesh) return;
-      if (c.name.includes('Leaves')) c.material = leavesMat;
-      else if (c.name.includes('Trunk')) c.material = trunkMat;
+      if (c.name.includes('Leaves')) {
+        c.material = leavesMat;
+        // Sphericalize foliage card normals around canopy center so external sakura crowns shade softly
+        const geo = c.geometry;
+        if (geo && geo.attributes.position) {
+          geo.computeBoundingBox();
+          const cCenter = geo.boundingBox.getCenter(new T.Vector3());
+          const pos = geo.attributes.position;
+          if (!geo.attributes.normal) geo.computeVertexNormals();
+          const norm = geo.attributes.normal;
+          const v = new T.Vector3();
+          const n = new T.Vector3();
+          for (let i = 0; i < pos.count; i++) {
+            v.fromBufferAttribute(pos, i).sub(cCenter);
+            if (v.lengthSq() > 1e-5) v.normalize();
+            else v.set(0, 1, 0);
+            n.fromBufferAttribute(norm, i).lerp(v, 0.78).normalize();
+            norm.setXYZ(i, n.x, n.y, n.z);
+          }
+          norm.needsUpdate = true;
+        }
+      } else if (c.name.includes('Trunk')) c.material = trunkMat;
       else c.material = groundPetalMat;
     });
 
