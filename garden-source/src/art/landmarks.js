@@ -477,9 +477,18 @@ export function buildMemoryLandmark(scene, lib, memory) {
       }
       const pearl = new T.Mesh(
         new T.SphereGeometry(0.016, 10, 8),
-        new T.MeshStandardMaterial({ color: '#fff8ef', roughness: 0.2, metalness: 0.15 })
+        new T.MeshPhysicalMaterial({ color: '#fff8ef', roughness: 0.14, metalness: 0.12, clearcoat: 1.0 })
       );
       bowGroup.add(pearl);
+
+      // Delicate pearl studs & brass filigree along the headband arch
+      const pearlStudMat = new T.MeshPhysicalMaterial({ color: '#fff6f9', roughness: 0.14, clearcoat: 1.0 });
+      for (let k = -2; k <= 2; k++) {
+        const a = Math.PI * 0.5 + k * 0.38;
+        const stud = new T.Mesh(new T.SphereGeometry(0.011, 8, 8), pearlStudMat);
+        stud.position.set(Math.cos(a) * 0.155, Math.sin(a) * 0.165, 0.016);
+        headbandGroup.add(stud);
+      }
 
       // Overarching blossoming miniature cherry tree rising behind & canopying over the headband stand
       const trunkPts = [
@@ -1277,11 +1286,26 @@ export function buildMemoryLandmark(scene, lib, memory) {
         g.add(pipe);
       }
 
-      // Wooden organ bench in front of the console
+      // Wooden organ bench in front of the console + tufted plum velvet cushion & brass draw-stops
       const benchTop = new T.Mesh(createRoundedBoxGeo(0.68, 0.048, 0.28, 0.022, 0.006), materials.woodMat);
       benchTop.position.set(0, 0.46, 0.36);
       benchTop.castShadow = benchTop.receiveShadow = true;
       g.add(benchTop);
+      const benchCushion = new T.Mesh(
+        createRoundedBoxGeo(0.62, 0.036, 0.23, 0.016, 0.006),
+        new T.MeshStandardMaterial({ color: '#5b3869', roughness: 0.78 })
+      );
+      benchCushion.position.set(0, 0.498, 0.36);
+      benchCushion.castShadow = true;
+      g.add(benchCushion);
+      for (const sx of [-0.46, 0.46]) {
+        for (let st = 0; st < 3; st++) {
+          const drawStop = new T.Mesh(new T.CylinderGeometry(0.013, 0.013, 0.036, 8), materials.brassMat);
+          drawStop.rotation.x = Math.PI / 2;
+          drawStop.position.set(sx, keybedY + 0.08 + st * 0.036, -0.02);
+          g.add(drawStop);
+        }
+      }
       for (const bx of [-0.28, 0.28]) {
         const bLeg = new T.Mesh(new T.BoxGeometry(0.05, 0.44, 0.24), materials.woodDarkMat);
         bLeg.position.set(bx, 0.23, 0.36);
@@ -1891,59 +1915,77 @@ export function buildShySpirit(scene, lib, x = 2.2, z = -12.0) {
   ghost.position.set(x, baseY + 0.82, z);
   scene.add(ghost);
 
-  // Sculpted fluted cloth silhouette (matching 01-world-entry & 03-garden-walk!)
+  // Higher-detail sculpted fluted silk spirit silhouette
   const profile = [
-    new T.Vector2(0.0, 0.56),
-    new T.Vector2(0.18, 0.52),
-    new T.Vector2(0.28, 0.36),
-    new T.Vector2(0.3, 0.14),
-    new T.Vector2(0.35, -0.14),
-    new T.Vector2(0.42, -0.34),
-    new T.Vector2(0.45, -0.44)
+    new T.Vector2(0.0, 0.57),
+    new T.Vector2(0.14, 0.54),
+    new T.Vector2(0.24, 0.44),
+    new T.Vector2(0.29, 0.28),
+    new T.Vector2(0.31, 0.08),
+    new T.Vector2(0.36, -0.16),
+    new T.Vector2(0.43, -0.35),
+    new T.Vector2(0.47, -0.45)
   ];
-  const geo = new T.LatheGeometry(profile, 28);
+  const geo = new T.LatheGeometry(profile, 40);
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const px = pos.getX(i);
     const py = pos.getY(i);
     const pz = pos.getZ(i);
-    if (py < 0.15) {
+    if (py < 0.16) {
       const ang = Math.atan2(pz, px);
-      const flare = (0.15 - py) / 0.6;
-      const wave = Math.sin(ang * 7) * 0.055 * flare;
-      const hem = Math.cos(ang * 7) * 0.04 * flare;
+      const flare = (0.16 - py) / 0.62;
+      const wave = Math.sin(ang * 8) * 0.058 * flare;
+      const hem = Math.cos(ang * 8) * 0.044 * flare;
       pos.setXYZ(i, px * (1 + wave), py + hem, pz * (1 + wave));
     }
   }
   geo.computeVertexNormals();
 
-  const spiritMat = new T.MeshStandardMaterial({
-    color: '#f7f3eb',
-    emissive: '#9db4cc',
-    emissiveIntensity: 0.24,
-    roughness: 0.52
+  const spiritMat = new T.MeshPhysicalMaterial({
+    color: '#faf5ff',
+    emissive: '#b59ce0',
+    emissiveIntensity: 0.3,
+    roughness: 0.38,
+    sheen: 0.8,
+    sheenColor: new T.Color('#f7d5f0')
   });
   const body = new T.Mesh(geo, spiritMat);
   body.castShadow = true;
   ghost.add(body);
 
-  // Expressive dark eyes + subtle blush cheeks
-  const eyeMat = new T.MeshStandardMaterial({ color: '#242934', roughness: 0.25 });
-  const blushMat = new T.MeshBasicMaterial({ color: '#eb9eb5', transparent: true, opacity: 0.6 });
+  // Tiny pink sakura petal resting playfully atop the shy spirit's head
+  const crownPetal = new T.Mesh(
+    new T.SphereGeometry(0.068, 12, 8),
+    new T.MeshStandardMaterial({ color: PALETTE.blossomMid, emissive: '#b85c8a', emissiveIntensity: 0.28, roughness: 0.45 })
+  );
+  crownPetal.scale.set(1.3, 0.24, 0.85);
+  crownPetal.position.set(0.06, 0.56, 0.03);
+  crownPetal.rotation.set(0.18, 0.4, -0.24);
+  ghost.add(crownPetal);
+
+  // Glossy dark eyes with bright catchlights + rosy blush cheeks
+  const eyeMat = new T.MeshPhysicalMaterial({ color: '#1d192b', roughness: 0.12, clearcoat: 1.0 });
+  const catchMat = new T.MeshBasicMaterial({ color: '#ffffff' });
+  const blushMat = new T.MeshBasicMaterial({ color: '#f29bc0', transparent: true, opacity: 0.66 });
   const ghostEyes = [];
   for (const ex of [-0.1, 0.1]) {
-    const eye = new T.Mesh(new T.SphereGeometry(0.042, 10, 8), eyeMat);
-    eye.scale.set(0.85, 1.2, 0.65);
-    eye.position.set(ex, 0.28, 0.27);
+    const eye = new T.Mesh(new T.SphereGeometry(0.044, 14, 10), eyeMat);
+    eye.scale.set(0.85, 1.22, 0.68);
+    eye.position.set(ex, 0.28, 0.275);
     ghost.add(eye);
     ghostEyes.push(eye);
 
-    const cheek = new T.Mesh(new T.CircleGeometry(0.036, 10), blushMat);
-    cheek.position.set(ex * 1.55, 0.21, 0.265);
+    const catchlight = new T.Mesh(new T.SphereGeometry(0.012, 8, 8), catchMat);
+    catchlight.position.set(ex + 0.012, 0.305, 0.306);
+    ghost.add(catchlight);
+
+    const cheek = new T.Mesh(new T.CircleGeometry(0.038, 12), blushMat);
+    cheek.position.set(ex * 1.56, 0.21, 0.27);
     ghost.add(cheek);
   }
 
-  // Warm soft ground light & contact shadow beneath the hovering spirit
+  // Warm soft contact shadow (follows spirit if companion mode moves it!)
   const spiritShadow = new T.Mesh(new T.PlaneGeometry(0.95, 0.95), materials.contactShadowMat);
   spiritShadow.rotation.x = -Math.PI / 2;
   spiritShadow.position.set(x, baseY + 0.02, z);
@@ -1952,16 +1994,43 @@ export function buildShySpirit(scene, lib, x = 2.2, z = -12.0) {
   const spiritHalo = new T.Sprite(
     new T.SpriteMaterial({
       map: textures.glowTex,
+      color: '#e8d0ff',
       transparent: true,
-      opacity: 0.34,
+      opacity: 0.42,
       depthWrite: false,
       blending: T.AdditiveBlending
     })
   );
-  spiritHalo.scale.set(1.35, 1.35, 1.35);
+  spiritHalo.scale.set(1.5, 1.5, 1.5);
   ghost.add(spiritHalo);
 
-  return { ghost, ghostEyes, baseY };
+  return { ghost, ghostEyes, spiritShadow, baseY, homeX: x, homeZ: z };
+}
+
+/**
+ * Creates a gracefully cupped, pointed 3D botanical lotus/sakura petal geometry
+ * anchored at its base (y = 0) so rotating around X unfurls it naturally.
+ */
+function createHeroPetalGeometry(width = 0.62, length = 1.38, cupDepth = 0.22) {
+  const segX = 10;
+  const segY = 14;
+  const geo = new T.PlaneGeometry(width, length, segX, segY);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const ux = pos.getX(i) / (width * 0.5); // -1..1
+    const vy = (pos.getY(i) + length * 0.5) / length; // 0 (base) .. 1 (tip)
+    // Tapered botanical petal silhouette (narrow base, broad belly, soft pointed tip)
+    const widthProfile = Math.sin(Math.pow(vy, 0.72) * Math.PI) * (0.94 + 0.14 * Math.sin(vy * Math.PI * 2));
+    const px = ux * (width * 0.5) * Math.max(0.08, widthProfile);
+    const py = vy * length;
+    // Deep natural cupping across width + graceful outward recurve near tip
+    const cup = (1 - ux * ux) * cupDepth * Math.sin(vy * Math.PI);
+    const arch = Math.sin(vy * Math.PI * 0.85) * 0.24 - Math.pow(vy, 2.4) * 0.3;
+    const pz = cup + arch;
+    pos.setXYZ(i, px, py, pz);
+  }
+  geo.computeVertexNormals();
+  return geo;
 }
 
 export function buildBlossomShrine(scene, lib, x = 0, z = -30.0) {
@@ -1971,80 +2040,191 @@ export function buildBlossomShrine(scene, lib, x = 0, z = -30.0) {
   shrine.position.set(x, y, z);
   scene.add(shrine);
 
-  // Carved tiered stone lotus pedestal
-  const base = new T.Mesh(new T.CylinderGeometry(1.15, 1.32, 0.22, 10), materials.stoneDarkMat);
-  base.position.y = 0.11;
-  base.castShadow = base.receiveShadow = true;
-  shrine.add(base);
+  // 1. Grand two-tier carved octagonal stone sanctuary dais + reflective amethyst water basin
+  const lowerDais = new T.Mesh(new T.CylinderGeometry(2.05, 2.28, 0.2, 8), materials.stoneDarkMat);
+  lowerDais.position.y = 0.1;
+  lowerDais.castShadow = lowerDais.receiveShadow = true;
+  shrine.add(lowerDais);
 
-  const basin = new T.Mesh(new T.CylinderGeometry(0.75, 0.55, 0.32, 12), materials.stoneMat);
-  basin.position.y = 0.38;
-  basin.castShadow = basin.receiveShadow = true;
-  shrine.add(basin);
+  const upperDais = new T.Mesh(new T.CylinderGeometry(1.52, 1.68, 0.24, 16), materials.stoneMat);
+  upperDais.position.y = 0.3;
+  upperDais.castShadow = upperDais.receiveShadow = true;
+  shrine.add(upperDais);
 
+  // Carved stone water basin rim + luminous sacred amethyst-tinted mirror water inside
+  const rimRing = new T.Mesh(new T.TorusGeometry(1.24, 0.12, 12, 32), materials.stoneMat);
+  rimRing.rotation.x = Math.PI / 2;
+  rimRing.position.y = 0.44;
+  rimRing.castShadow = rimRing.receiveShadow = true;
+  shrine.add(rimRing);
+
+  const brassFiligreeRing = new T.Mesh(new T.TorusGeometry(1.24, 0.028, 8, 36), materials.brassMat);
+  brassFiligreeRing.rotation.x = Math.PI / 2;
+  brassFiligreeRing.position.y = 0.55;
+  shrine.add(brassFiligreeRing);
+
+  const sacredWater = new T.Mesh(
+    new T.CircleGeometry(1.18, 32),
+    new T.MeshPhysicalMaterial({
+      color: '#463268',
+      emissive: '#352259',
+      emissiveIntensity: 0.45,
+      roughness: 0.08,
+      metalness: 0.25,
+      clearcoat: 1.0
+    })
+  );
+  sacredWater.rotation.x = -Math.PI / 2;
+  sacredWater.position.y = 0.44;
+  shrine.add(sacredWater);
+
+  // Mossy perimeter stones & 4 glowing miniature lotus rim candles
+  const candleFlameMat = new T.MeshBasicMaterial({ color: '#ffdf9e' });
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const cx = Math.cos(a) * 1.24;
+    const cz = Math.sin(a) * 1.24;
+    const holder = new T.Mesh(new T.CylinderGeometry(0.085, 0.06, 0.08, 10), materials.brassMat);
+    holder.position.set(cx, 0.56, cz);
+    shrine.add(holder);
+    const flame = new T.Mesh(new T.SphereGeometry(0.032, 8, 8), candleFlameMat);
+    flame.scale.set(0.75, 1.5, 0.75);
+    flame.position.set(cx, 0.64, cz);
+    shrine.add(flame);
+  }
+
+  // Carved central lotus chalice stem rising out of the water basin
+  const chalice = new T.Mesh(new T.CylinderGeometry(0.46, 0.34, 0.34, 16), materials.stoneDarkMat);
+  chalice.position.y = 0.56;
+  chalice.castShadow = true;
+  shrine.add(chalice);
+  const chaliceCollar = new T.Mesh(new T.TorusGeometry(0.44, 0.045, 10, 24), materials.brassMat);
+  chaliceCollar.rotation.x = Math.PI / 2;
+  chaliceCollar.position.y = 0.72;
+  shrine.add(chaliceCollar);
+
+  // 2. HERO MULTI-LAYERED BLOOMING FLOWER (3 concentric sculpted petal rings = 24 petals!)
   const bloom = new T.Group();
-  bloom.position.y = 0.62;
+  bloom.position.y = 0.72;
   shrine.add(bloom);
 
+  const outerPetalGeo = createHeroPetalGeometry(0.72, 1.56, 0.24);
+  const midPetalGeo = createHeroPetalGeometry(0.58, 1.28, 0.22);
+  const innerPetalGeo = createHeroPetalGeometry(0.42, 0.96, 0.18);
+
+  const outerPetalMat = materials.lotusPetalMat;
+  const midPetalMat = materials.lotusPetalMat.clone();
+  midPetalMat.emissive = new T.Color('#e089db');
+  midPetalMat.emissiveIntensity = 0.52;
+  const innerPetalMat = materials.lotusPetalMat.clone();
+  innerPetalMat.emissive = new T.Color('#ffd0ec');
+  innerPetalMat.emissiveIntensity = 0.65;
+
   const bloomPetals = [];
-  const petalMat = new T.MeshStandardMaterial({
-    color: PALETTE.blossomPale,
-    emissive: '#6e3d52',
-    emissiveIntensity: 0.18,
-    roughness: 0.58
+  const bloomRings = [
+    { count: 10, geo: outerPetalGeo, mat: outerPetalMat, radius: 0.36, closedTilt: 0.42, openTilt: 1.28, offset: 0, petals: [] },
+    { count: 8, geo: midPetalGeo, mat: midPetalMat, radius: 0.26, closedTilt: 0.28, openTilt: 0.94, offset: Math.PI / 8, petals: [] },
+    { count: 6, geo: innerPetalGeo, mat: innerPetalMat, radius: 0.16, closedTilt: 0.16, openTilt: 0.56, offset: Math.PI / 6, petals: [] }
+  ];
+
+  for (const ring of bloomRings) {
+    for (let i = 0; i < ring.count; i++) {
+      const holder = new T.Group();
+      holder.rotation.y = (i / ring.count) * Math.PI * 2 + ring.offset;
+      bloom.add(holder);
+
+      const pivot = new T.Group();
+      pivot.position.set(0, 0.02, ring.radius);
+      pivot.rotation.x = ring.closedTilt;
+      holder.add(pivot);
+
+      const p = new T.Mesh(ring.geo, ring.mat);
+      p.castShadow = true;
+      pivot.add(p);
+      ring.petals.push(pivot);
+      bloomPetals.push(pivot);
+    }
+  }
+
+  // 3. Arched golden stamen crown & radiant pearl-amber heart orb
+  const stamenGroup = new T.Group();
+  bloom.add(stamenGroup);
+  const antherMat = new T.MeshStandardMaterial({
+    color: '#fff2be',
+    emissive: '#ffbf5e',
+    emissiveIntensity: 2.0,
+    roughness: 0.2
   });
-  for (let i = 0; i < 8; i++) {
-    const holder = new T.Group();
-    holder.rotation.y = (i / 8) * Math.PI * 2;
-    bloom.add(holder);
-    const p = new T.Mesh(new T.SphereGeometry(0.42, 14, 10), petalMat);
-    p.scale.set(0.56, 1.25, 0.26);
-    p.position.set(0, 0.32, 0.24);
-    p.rotation.x = -0.32;
-    p.castShadow = true;
-    holder.add(p);
-    bloomPetals.push(p);
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    const r = 0.22 + (i % 2) * 0.08;
+    const h = 0.42 + (i % 3) * 0.09;
+    const stem = new T.Mesh(new T.CylinderGeometry(0.006, 0.009, h, 5), materials.brassMat);
+    stem.position.set(Math.cos(a) * r * 0.72, h * 0.48, Math.sin(a) * r * 0.72);
+    stem.rotation.set(Math.sin(a) * 0.36, 0, -Math.cos(a) * 0.36);
+    stamenGroup.add(stem);
+
+    const tip = new T.Mesh(new T.SphereGeometry(0.026, 8, 8), antherMat);
+    tip.position.set(Math.cos(a) * r * 1.12, h * 0.94, Math.sin(a) * r * 1.12);
+    stamenGroup.add(tip);
   }
 
   const coreOrb = new T.Mesh(
-    new T.SphereGeometry(0.18, 16, 12),
-    new T.MeshStandardMaterial({
-      color: PALETTE.warmIvory,
-      emissive: PALETTE.amberCore,
-      emissiveIntensity: 1.4,
-      roughness: 0.25
+    new T.SphereGeometry(0.24, 24, 18),
+    new T.MeshPhysicalMaterial({
+      color: '#fff6e8',
+      emissive: '#ffc97a',
+      emissiveIntensity: 1.65,
+      roughness: 0.16,
+      clearcoat: 1.0
     })
   );
-  coreOrb.position.y = 0.32;
+  coreOrb.position.y = 0.46;
   bloom.add(coreOrb);
 
+  // Soft radiant amethyst-gold flower halo
   const halo = new T.Sprite(
     new T.SpriteMaterial({
       map: textures.glowTex,
+      color: '#f7c8ff',
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.68,
       depthWrite: false,
       blending: T.AdditiveBlending
     })
   );
-  halo.position.y = 0.32;
-  halo.scale.set(1.75, 1.75, 1.75);
+  halo.position.y = 0.58;
+  halo.scale.set(2.8, 2.8, 2.8);
   bloom.add(halo);
+
+  // 4. Orbiting golden pollen motes gently rising around the flower
+  const pollenMotes = [];
+  const moteGeo = new T.SphereGeometry(0.022, 8, 6);
+  const moteMat = new T.MeshBasicMaterial({ color: '#ffe5a3' });
+  for (let i = 0; i < 14; i++) {
+    const m = new T.Mesh(moteGeo, moteMat);
+    const angle = (i / 14) * Math.PI * 2;
+    const rad = 0.45 + (i % 4) * 0.26;
+    const baseH = 0.45 + (i % 5) * 0.24;
+    m.position.set(Math.cos(angle) * rad, baseH, Math.sin(angle) * rad);
+    bloom.add(m);
+    pollenMotes.push({ mesh: m, angle, rad, baseH, speed: 0.38 + (i % 3) * 0.14 });
+  }
 
   const shrineLight = {
     x,
-    y: y + 0.95,
+    y: y + 1.35,
     z,
-    color: PALETTE.lanternGlow,
-    intensity: 3.8,
-    baseIntensity: 3.8,
-    distance: 9.0,
-    decay: 1.8
+    color: '#ffd4a6',
+    intensity: 5.2,
+    baseIntensity: 5.2,
+    distance: 11.5,
+    decay: 1.7
   };
 
-  addContactShadow(shrine, materials.contactShadowMat, 1.5, 0.018);
+  addContactShadow(shrine, materials.contactShadowMat, 2.35, 0.018);
 
-  return { bloomPetals, coreOrb, shrineLight };
+  return { bloom, bloomPetals, bloomRings, coreOrb, halo, pollenMotes, shrineLight };
 }
 
 export function buildPlayerOrb(scene, lib) {
@@ -2053,60 +2233,96 @@ export function buildPlayerOrb(scene, lib) {
   player.position.set(0, getTerrainHeight(0, 21.5), 21.5);
   scene.add(player);
 
-  const body = new T.Mesh(
-    new T.SphereGeometry(0.19, 18, 14),
-    new T.MeshStandardMaterial({
-      color: PALETTE.warmIvory,
-      emissive: PALETTE.amberCore,
-      emissiveIntensity: 0.72,
-      roughness: 0.32
+  // Sculpted pearlescent spirit droplet shell + luminous golden inner heart core
+  const bodyGroup = new T.Group();
+  bodyGroup.position.y = 0.56;
+  player.add(bodyGroup);
+
+  const dropletProfile = [
+    new T.Vector2(0.0, -0.2),
+    new T.Vector2(0.14, -0.17),
+    new T.Vector2(0.2, -0.05),
+    new T.Vector2(0.18, 0.11),
+    new T.Vector2(0.1, 0.22),
+    new T.Vector2(0.0, 0.27)
+  ];
+  const outerShell = new T.Mesh(
+    new T.LatheGeometry(dropletProfile, 24),
+    new T.MeshPhysicalMaterial({
+      color: '#f8eeff',
+      emissive: '#c89bff',
+      emissiveIntensity: 0.42,
+      roughness: 0.14,
+      metalness: 0.05,
+      clearcoat: 1.0,
+      transparent: true,
+      opacity: 0.88
     })
   );
-  body.scale.set(1, 1.18, 1);
-  body.position.y = 0.55;
-  body.castShadow = true;
-  player.add(body);
+  outerShell.castShadow = true;
+  bodyGroup.add(outerShell);
 
-  // Delicate sculpted fairy wings
-  const wingShape = new T.Shape();
-  wingShape.moveTo(0, 0);
-  wingShape.bezierCurveTo(0.18, 0.16, 0.36, 0.12, 0.34, -0.04);
-  wingShape.bezierCurveTo(0.32, -0.18, 0.12, -0.22, 0, -0.06);
-  const wingGeo = new T.ShapeGeometry(wingShape, 10);
-  wingGeo.rotateX(-Math.PI / 2);
+  const innerHeart = new T.Mesh(
+    new T.SphereGeometry(0.1, 14, 12),
+    new T.MeshBasicMaterial({ color: '#ffe5a8' })
+  );
+  innerHeart.position.y = -0.02;
+  bodyGroup.add(innerHeart);
 
-  const wingMat = new T.MeshStandardMaterial({
-    color: PALETTE.blossomPale,
-    emissive: PALETTE.blossomMid,
-    emissiveIntensity: 0.25,
-    transparent: true,
-    opacity: 0.78,
-    roughness: 0.3,
-    side: T.DoubleSide
-  });
+  // Delicate orbiting golden stardust ring around the player spirit
+  const starRing = new T.Mesh(
+    new T.TorusGeometry(0.28, 0.008, 8, 32),
+    materials.brassMat
+  );
+  starRing.rotation.x = Math.PI * 0.42;
+  starRing.rotation.y = 0.25;
+  bodyGroup.add(starRing);
+
+  // 4 layered iridescent gossamer fairy wings (2 larger upper + 2 smaller lower!)
+  const upperWingShape = new T.Shape();
+  upperWingShape.moveTo(0, 0);
+  upperWingShape.bezierCurveTo(0.18, 0.2, 0.44, 0.18, 0.42, -0.02);
+  upperWingShape.bezierCurveTo(0.38, -0.16, 0.14, -0.18, 0, -0.05);
+  const upperWingGeo = new T.ShapeGeometry(upperWingShape, 14);
+  upperWingGeo.rotateX(-Math.PI / 2);
+
+  const lowerWingShape = new T.Shape();
+  lowerWingShape.moveTo(0, 0);
+  lowerWingShape.bezierCurveTo(0.12, 0.08, 0.26, 0.02, 0.24, -0.1);
+  lowerWingShape.bezierCurveTo(0.2, -0.2, 0.08, -0.16, 0, -0.04);
+  const lowerWingGeo = new T.ShapeGeometry(lowerWingShape, 12);
+  lowerWingGeo.rotateX(-Math.PI / 2);
+
   const wings = [];
   for (const side of [-1, 1]) {
-    const w = new T.Mesh(wingGeo, wingMat);
-    w.position.set(side * 0.12, 0.62, -0.02);
-    if (side < 0) w.scale.x = -1;
-    player.add(w);
-    wings.push(w);
+    const wUpper = new T.Mesh(upperWingGeo, materials.gossamerWingMat);
+    wUpper.position.set(side * 0.11, 0.08, -0.04);
+    if (side < 0) wUpper.scale.x = -1;
+    bodyGroup.add(wUpper);
+    wings.push(wUpper);
+
+    const wLower = new T.Mesh(lowerWingGeo, materials.gossamerWingMat);
+    wLower.position.set(side * 0.1, -0.01, -0.06);
+    if (side < 0) wLower.scale.x = -1;
+    bodyGroup.add(wLower);
+    wings.push(wLower);
   }
 
-  addContactShadow(player, materials.contactShadowMat, 0.38, 0.02);
+  addContactShadow(player, materials.contactShadowMat, 0.4, 0.02);
 
   const aura = new T.Sprite(
     new T.SpriteMaterial({
       map: textures.glowTex,
+      color: '#eed4ff',
       transparent: true,
-      opacity: 0.42,
+      opacity: 0.48,
       depthWrite: false,
       blending: T.AdditiveBlending
     })
   );
-  aura.position.y = 0.55;
-  aura.scale.set(1.05, 1.05, 1.05);
+  aura.position.y = 0.56;
+  aura.scale.set(1.18, 1.18, 1.18);
   player.add(aura);
 
-  return { player, body, wings, aura };
+  return { player, body: bodyGroup, wings, aura, starRing };
 }

@@ -128,37 +128,37 @@ export function createMaterialLibrary(renderer) {
   });
 
   const woodMat = new T.MeshStandardMaterial({
-    color: '#c8b2a2',
+    color: '#c9ae9e',
     map: woodAlbedo,
     normalMap: woodNormal,
-    normalScale: new T.Vector2(1.0, 1.0),
-    roughness: 0.84,
-    metalness: 0.03
+    normalScale: new T.Vector2(1.25, 1.25),
+    roughness: 0.64,
+    metalness: 0.05
   });
 
   const woodDarkMat = new T.MeshStandardMaterial({
-    color: '#7a6056',
+    color: '#6e524d',
     map: woodAlbedo,
     normalMap: woodNormal,
-    normalScale: new T.Vector2(1.0, 1.0),
-    roughness: 0.88,
-    metalness: 0.03
+    normalScale: new T.Vector2(1.25, 1.25),
+    roughness: 0.7,
+    metalness: 0.05
   });
 
   const roofTileMat = new T.MeshStandardMaterial({
     map: roofAlbedo,
     normalMap: roofNormal,
-    normalScale: new T.Vector2(1.25, 1.25),
-    roughness: 0.72,
-    metalness: 0.08
+    normalScale: new T.Vector2(1.35, 1.35),
+    roughness: 0.62,
+    metalness: 0.14
   });
 
   const shojiMat = new T.MeshStandardMaterial({
     map: shojiTex,
     emissiveMap: shojiTex,
-    emissive: new T.Color('#ffb969'),
-    emissiveIntensity: 1.55,
-    roughness: 0.5
+    emissive: new T.Color('#ffc172'),
+    emissiveIntensity: 1.65,
+    roughness: 0.45
   });
 
   const blossomCardMat = new T.MeshStandardMaterial({
@@ -212,31 +212,36 @@ export function createMaterialLibrary(renderer) {
     side: T.DoubleSide
   });
 
-  const ceramicMat = new T.MeshStandardMaterial({
-    color: '#ece2d4',
-    roughness: 0.34,
-    metalness: 0.05
+  const ceramicMat = new T.MeshPhysicalMaterial({
+    color: '#f3ebe1',
+    roughness: 0.2,
+    metalness: 0.04,
+    clearcoat: 0.85,
+    clearcoatRoughness: 0.14
   });
 
   const darkMetalMat = new T.MeshStandardMaterial({
-    color: '#323740',
-    roughness: 0.45,
-    metalness: 0.65
+    color: '#2c2938',
+    roughness: 0.36,
+    metalness: 0.76
   });
 
-  const brassMat = new T.MeshStandardMaterial({
-    color: '#d8b275',
-    roughness: 0.35,
-    metalness: 0.82
+  const brassMat = new T.MeshPhysicalMaterial({
+    color: '#e6c17a',
+    roughness: 0.24,
+    metalness: 0.88,
+    clearcoat: 0.35,
+    clearcoatRoughness: 0.2
   });
 
-  const glassMat = new T.MeshStandardMaterial({
-    color: '#e5eef5',
-    roughness: 0.1,
-    metalness: 0.12,
-    envMapIntensity: 1.5,
+  const glassMat = new T.MeshPhysicalMaterial({
+    color: '#ece6fa',
+    roughness: 0.08,
+    metalness: 0.08,
+    clearcoat: 1.0,
+    envMapIntensity: 1.6,
     transparent: true,
-    opacity: 0.46
+    opacity: 0.44
   });
 
   // Soft radial glow texture for lantern halos, fireflies & moon aura
@@ -612,6 +617,95 @@ export function createMaterialLibrary(renderer) {
     emissiveIntensity: 0.25
   });
 
+  // 9. Luminous veined sakura-lotus petal texture for the Hero Blooming Flower at the shrine
+  const lpCanvas = document.createElement('canvas');
+  lpCanvas.width = 256;
+  lpCanvas.height = 512;
+  const lpCtx = lpCanvas.getContext('2d');
+  const lpGrad = lpCtx.createLinearGradient(0, 512, 0, 0);
+  lpGrad.addColorStop(0.0, '#7c4594'); // rich amethyst-plum base
+  lpGrad.addColorStop(0.28, '#c972b2'); // rose-orchid mid
+  lpGrad.addColorStop(0.68, '#f6bdd6'); // sakura pink upper
+  lpGrad.addColorStop(1.0, '#fff4fa'); // luminous pearl tip
+  lpCtx.fillStyle = lpGrad;
+  lpCtx.fillRect(0, 0, 256, 512);
+  // Delicate botanical veins radiating from petal base
+  lpCtx.strokeStyle = 'rgba(255, 240, 250, 0.34)';
+  lpCtx.lineWidth = 2.2;
+  for (let i = -5; i <= 5; i++) {
+    lpCtx.beginPath();
+    lpCtx.moveTo(128, 512);
+    lpCtx.quadraticCurveTo(128 + i * 26, 280, 128 + i * 19, 36 + Math.abs(i) * 14);
+    lpCtx.stroke();
+  }
+  // Subtle golden inner luminescence at the base
+  const lpBaseGlow = lpCtx.createRadialGradient(128, 505, 8, 128, 490, 130);
+  lpBaseGlow.addColorStop(0, 'rgba(255, 224, 152, 0.72)');
+  lpBaseGlow.addColorStop(1, 'rgba(255, 224, 152, 0)');
+  lpCtx.fillStyle = lpBaseGlow;
+  lpCtx.fillRect(0, 340, 256, 172);
+  const lotusPetalTex = new T.CanvasTexture(lpCanvas);
+  lotusPetalTex.colorSpace = T.SRGBColorSpace;
+
+  const lotusPetalMat = new T.MeshPhysicalMaterial({
+    map: lotusPetalTex,
+    emissiveMap: lotusPetalTex,
+    emissive: new T.Color('#c87ae6'),
+    emissiveIntensity: 0.42,
+    roughness: 0.34,
+    metalness: 0.04,
+    clearcoat: 0.45,
+    clearcoatRoughness: 0.28,
+    sheen: 0.85,
+    sheenColor: new T.Color('#ffd6ee'),
+    side: T.DoubleSide
+  });
+
+  // 10. Iridescent gossamer wing texture for the Player Firefly Spirit
+  const wgCanvas = document.createElement('canvas');
+  wgCanvas.width = 256;
+  wgCanvas.height = 128;
+  const wgCtx = wgCanvas.getContext('2d');
+  const wgGrad = wgCtx.createLinearGradient(0, 64, 256, 64);
+  wgGrad.addColorStop(0, 'rgba(255, 242, 214, 0.92)');
+  wgGrad.addColorStop(0.45, 'rgba(242, 198, 248, 0.78)');
+  wgGrad.addColorStop(1, 'rgba(196, 158, 255, 0.56)');
+  wgCtx.fillStyle = wgGrad;
+  wgCtx.fillRect(0, 0, 256, 128);
+  wgCtx.strokeStyle = 'rgba(255, 246, 225, 0.62)';
+  wgCtx.lineWidth = 2;
+  for (let i = 0; i < 6; i++) {
+    wgCtx.beginPath();
+    wgCtx.moveTo(0, 64);
+    wgCtx.quadraticCurveTo(110, 22 + i * 17, 248, 16 + i * 19);
+    wgCtx.stroke();
+  }
+  const gossamerWingTex = new T.CanvasTexture(wgCanvas);
+  gossamerWingTex.colorSpace = T.SRGBColorSpace;
+
+  const gossamerWingMat = new T.MeshPhysicalMaterial({
+    map: gossamerWingTex,
+    emissive: new T.Color('#d8a6ff'),
+    emissiveIntensity: 0.45,
+    roughness: 0.2,
+    metalness: 0.1,
+    clearcoat: 0.7,
+    transparent: true,
+    opacity: 0.84,
+    side: T.DoubleSide
+  });
+
+  // 11. Warm glowing paper material for floating Sky Wish Lanterns
+  const skyLanternMat = new T.MeshStandardMaterial({
+    color: '#ffe6c4',
+    emissive: new T.Color('#ffaa66'),
+    emissiveIntensity: 1.45,
+    roughness: 0.6,
+    transparent: true,
+    opacity: 0.92,
+    side: T.DoubleSide
+  });
+
   return {
     textures: {
       grassTex,
@@ -625,6 +719,8 @@ export function createMaterialLibrary(renderer) {
       glowTex,
       blossomTex,
       cherryPetalTex,
+      lotusPetalTex,
+      gossamerWingTex,
       assignmentPlaceholderTex,
       examSheetTex,
       phoneLockTex,
@@ -646,6 +742,9 @@ export function createMaterialLibrary(renderer) {
       shrubCardMat,
       foliage3DMat,
       cherryPetalMat,
+      lotusPetalMat,
+      gossamerWingMat,
+      skyLanternMat,
       lilyPadMat,
       linenMat,
       ceramicMat,

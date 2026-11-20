@@ -3,32 +3,67 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#1e2230">
+  <meta name="theme-color" content="#1b142c">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='24' font-size='24'>✿</text></svg>">
   <title>A Little Place for Hirushi — The Memory Garden</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
   <div id="world" aria-label="Interactive 3D Memory Garden"></div>
   <div class="vignette"></div>
 
-  <header id="topBar">
-    <span class="brand">A LITTLE PLACE <b>✿</b> <span class="brand-sub">THE MEMORY GARDEN</span></span>
-    <div class="toolbar">
-      <button id="mapButton" type="button" aria-expanded="false">garden map</button>
-      <button id="journalButton" type="button" aria-expanded="false">memories (<span id="journalCount">0/10</span>)</button>
-      <button id="moodButton" type="button" title="Switch sky & lighting mood">sky: twilight</button>
-      <button id="qualityButton" type="button" title="Cycle visual quality preset">quality: high</button>
-      <button id="sound" type="button" aria-pressed="true">♪ sound on</button>
-      <button id="snapshotBtn" type="button" class="icon-pill" aria-label="Save garden postcard" title="Save clean postcard snapshot">📷</button>
+  <!-- MMORPG Top-Left Zone & Trail Progress Crest -->
+  <header id="topBar" class="rpg-hud">
+    <div id="rpgCrest" class="rpg-crest">
+      <div class="crest-sigil" aria-hidden="true">✿</div>
+      <div class="crest-info">
+        <span class="brand">A LITTLE PLACE <span class="brand-sub">· MEMORY GARDEN</span></span>
+        <span id="place">THE LANTERN GATE</span>
+        <div class="trail-bar-row">
+          <div class="trail-bar" aria-hidden="true"><i id="trailFill"></i></div>
+          <small id="count">0 / 4 discoveries · 0 / 10 memories</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- MMORPG Top-Right Circular Fantasy Mini-Map + Quest Objective Tracker -->
+    <div id="minimapArea" class="minimap-area">
+      <button id="minimapWrap" type="button" class="minimap-wrap" aria-label="Open Garden Map" title="Click to open Garden Map (M)">
+        <span class="compass-n" aria-hidden="true">N</span>
+        <canvas id="minimapCanvas" width="128" height="128"></canvas>
+        <span class="minimap-tag">MAP · M</span>
+      </button>
+
+      <div id="questTracker" class="quest-tracker" aria-live="polite">
+        <div class="quest-head">
+          <span class="quest-eyebrow">✦ TRAIL OBJECTIVE</span>
+          <button id="questToggle" type="button" class="quest-toggle" aria-label="Collapse objective tracker">−</button>
+        </div>
+        <div id="questBody" class="quest-body">
+          <strong id="questTitle">01 · That Headband</strong>
+          <span id="questMeta">12m ↑</span>
+        </div>
+      </div>
     </div>
   </header>
 
+  <!-- MMORPG Discovery Unlock Banner -->
+  <div id="rpgBanner" class="rpg-banner" aria-live="polite" hidden>
+    <span class="banner-ornament">✦</span>
+    <div class="banner-text">
+      <span id="rpgBannerSub" class="banner-sub">MEMORY DISCOVERED</span>
+      <strong id="rpgBannerTitle">The Cupcake Wrapper</strong>
+    </div>
+    <span class="banner-ornament">✦</span>
+  </div>
+
+  <!-- Entry Title Screen -->
   <section id="entry">
     <div class="entry-card">
-      <p class="eyebrow">A TINY WALKABLE MEMORY WORLD</p>
+      <p class="eyebrow">✦ A TINY WALKABLE MEMORY REALM ✦</p>
       <h1>Hey, <em>Hirushi.</em></h1>
-      <p class="entry-lead">I made you a quiet little garden to wander through—holding the original four garden moments alongside ten small landmarks from our university days.</p>
+      <div class="ornate-divider" aria-hidden="true"><span>✿</span></div>
+      <p class="entry-lead">I made you a quiet twilight garden to wander through—holding the original four garden moments, ten landmarks from our university days, and a blooming flower waiting at the end of the path.</p>
       <div id="entryLoader" class="entry-loader" aria-live="polite">
         <span id="entryLoaderText">Preparing lanterns &amp; blossoms…</span>
         <div class="loader-track"><i id="entryLoaderBar"></i></div>
@@ -36,20 +71,21 @@
       <button class="primary" id="begin" type="button">step into the garden →</button>
       <small>
         Walk with <strong>WASD</strong> or <strong>Arrow keys</strong> · Drag to look around · Press <strong>E</strong> near a landmark<br>
-        On mobile, use the bottom-left thumbstick · Sound begins gently when you enter
+        Press <strong>M</strong> for Map · <strong>L</strong> to release a Wish Lantern · <strong>T</strong> for Guided Tour
       </small>
     </div>
   </section>
 
+  <!-- Garden Map Drawer -->
   <aside id="map" hidden aria-label="Garden Map and Fast Travel">
     <div class="panel-head">
       <div>
-        <p class="eyebrow">NAVIGATION</p>
+        <p class="eyebrow">✦ WAYPOINTS &amp; FAST TRAVEL</p>
         <h2>Your little garden</h2>
       </div>
       <button id="closeMap" type="button" class="icon-btn" aria-label="Close map">×</button>
     </div>
-    <p class="panel-sub">Walk along the stone path to discover each landmark, or step directly to a place below.</p>
+    <p class="panel-sub">Walk along the lantern path to discover each landmark, or step directly to any waypoint below.</p>
 
     <div class="map-section">
       <h3>Original Garden Discoveries</h3>
@@ -65,18 +101,20 @@
     <button id="resetProgress" type="button" class="text-link-btn">Reset visited trail progress</button>
   </aside>
 
+  <!-- Memory Codex / Journal Drawer -->
   <aside id="journal" hidden aria-label="Compact Memory Journal">
     <div class="panel-head">
       <div>
-        <p class="eyebrow">MEMORY TRAIL LOG</p>
+        <p class="eyebrow">✦ MEMORY CODEX</p>
         <h2>Discovered Moments</h2>
       </div>
       <button id="closeJournal" type="button" class="icon-btn" aria-label="Close journal">×</button>
     </div>
-    <p class="panel-sub">Memories you have visited while walking the trail. Select any entry to revisit its story or attach a personal photo.</p>
+    <p class="panel-sub">Memories unlocked along the path. Select any entry to revisit its story or attach a personal photo.</p>
     <div id="journalList" class="journal-list"></div>
   </aside>
 
+  <!-- RPG Lore / Memory Dialogue Card -->
   <section id="message" hidden aria-live="polite">
     <div class="message-head">
       <p class="eyebrow" id="chapter"></p>
@@ -108,6 +146,14 @@
       </div>
     </div>
 
+    <!-- Playable 1-Octave Organ Mini-Keyboard (shown on memory-07) -->
+    <div id="organKeyboardWrap" class="organ-keyboard-wrap" hidden>
+      <div class="organ-kb-head">
+        <span class="focus-label">Play the choir organ (click keys or press A–K):</span>
+      </div>
+      <div id="organKeyboard" class="organ-keyboard" role="group" aria-label="Interactive choir organ keyboard"></div>
+    </div>
+
     <div id="sceneFocusBar" class="scene-focus-bar" hidden>
       <span class="focus-label">Inspect scene details:</span>
       <div class="focus-actions">
@@ -130,15 +176,40 @@
 
   <button id="interact" type="button" hidden></button>
 
-  <div id="location">
-    <span id="place">THE LANTERN GATE</span>
-    <small id="count">0 / 4 discoveries · 0 / 10 memories</small>
-  </div>
+  <!-- MMORPG Bottom Action Hotbar -->
+  <nav id="hotbar" class="rpg-hotbar" aria-label="Garden Actions">
+    <button id="mapButton" type="button" class="hot-slot" aria-expanded="false" title="Open Garden Map (M)">
+      <kbd>M</kbd><span class="slot-label">Map</span>
+    </button>
+    <button id="journalButton" type="button" class="hot-slot" aria-expanded="false" title="Open Memory Codex (J)">
+      <kbd>J</kbd><span class="slot-label">Codex <em id="journalCount">0/10</em></span>
+    </button>
+    <button id="tourButton" type="button" class="hot-slot" aria-pressed="false" title="Guided Memory Walk (T)">
+      <kbd>T</kbd><span class="slot-label">Tour</span>
+    </button>
+    <button id="lanternButton" type="button" class="hot-slot" title="Release a Sky Wish Lantern (L)">
+      <kbd>L</kbd><span class="slot-label">Wish</span>
+    </button>
+    <button id="moodButton" type="button" class="hot-slot" title="Switch Sky & Lighting Mood (V)">
+      <kbd>V</kbd><span class="slot-label">Twilight</span>
+    </button>
+    <button id="snapshotBtn" type="button" class="hot-slot icon-slot" aria-label="Save garden postcard" title="Save Postcard Snapshot">
+      <span class="slot-icon">📷</span><span class="slot-label">Card</span>
+    </button>
+    <button id="sound" type="button" class="hot-slot" aria-pressed="true" title="Toggle Soundscape & Music">
+      <span class="slot-icon">♪</span><span class="slot-label">On</span>
+    </button>
+    <button id="qualityButton" type="button" class="hot-slot" title="Cycle Graphics Quality">
+      <span class="slot-icon">⚙</span><span class="slot-label">High</span>
+    </button>
+    <button id="home" type="button" class="hot-slot icon-slot" aria-label="Return to entrance" title="Return to Entrance Gate">
+      <span class="slot-icon">⌂</span>
+    </button>
+  </nav>
 
-  <p id="hint">WASD / Arrows to walk · Drag to look · E to interact · M for map</p>
+  <p id="hint">WASD / Arrows to walk · Drag to look · E interact · L release wish lantern</p>
 
   <div id="joystick" aria-label="Movement thumbstick"><i></i></div>
-  <button id="home" type="button" aria-label="Return to entrance" title="Return to entrance">⌂</button>
 
   <dialog id="note">
     <button id="closeNote" type="button" aria-label="Close note">×</button>

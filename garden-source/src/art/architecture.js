@@ -90,9 +90,23 @@ export function buildLantern(scene, lib, x, z, { scale = 1, hasLight = false, li
   roof.castShadow = true;
   g.add(roof);
 
-  const finial = new T.Mesh(new T.SphereGeometry(0.055, 10, 8), materials.brassMat);
-  finial.position.y = 1.67;
+  // Sculpted 3-tier brass lotus finial & delicate brass eave corner bells
+  const finialBase = new T.Mesh(new T.CylinderGeometry(0.068, 0.095, 0.04, 10), materials.brassMat);
+  finialBase.position.y = 1.66;
+  g.add(finialBase);
+  const finial = new T.Mesh(new T.SphereGeometry(0.056, 12, 10), materials.brassMat);
+  finial.position.y = 1.71;
   g.add(finial);
+  const finialTip = new T.Mesh(new T.ConeGeometry(0.028, 0.085, 8), materials.brassMat);
+  finialTip.position.y = 1.79;
+  g.add(finialTip);
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const bell = new T.Mesh(new T.ConeGeometry(0.022, 0.048, 6), materials.brassMat);
+      bell.position.set(sx * 0.39, 1.37, sz * 0.39);
+      g.add(bell);
+    }
+  }
 
   addContactShadow(g, materials.contactShadowMat, 0.62, 0.015);
 
@@ -302,9 +316,22 @@ export function buildGardenPavilion(scene, lib, x = -4.2, z = -14.2) {
   upperTier.castShadow = true;
   g.add(upperTier);
 
-  const ridgeOrb = new T.Mesh(new T.SphereGeometry(0.12, 10, 10), materials.brassMat);
-  ridgeOrb.position.y = 4.46;
+  const ridgeBase = new T.Mesh(new T.CylinderGeometry(0.14, 0.2, 0.09, 12), materials.brassMat);
+  ridgeBase.position.y = 4.42;
+  g.add(ridgeBase);
+  const ridgeOrb = new T.Mesh(new T.SphereGeometry(0.125, 14, 12), materials.brassMat);
+  ridgeOrb.position.y = 4.53;
   g.add(ridgeOrb);
+  const ridgeSpire = new T.Mesh(new T.ConeGeometry(0.055, 0.26, 10), materials.brassMat);
+  ridgeSpire.position.y = 4.74;
+  g.add(ridgeSpire);
+
+  // Brass post collar rings on the 4 pavilion columns
+  for (const [px, pz] of postPositions) {
+    const capRing = new T.Mesh(new T.CylinderGeometry(0.128, 0.128, 0.05, 10), materials.brassMat);
+    capRing.position.set(px, 2.86, pz);
+    g.add(capRing);
+  }
 
   // Under-eave timber trim collar
   const eaveTrim = new T.Mesh(new T.BoxGeometry(W + 0.55, 0.08, D + 0.55), materials.woodDarkMat);
@@ -343,10 +370,18 @@ export function buildGardenPavilion(scene, lib, x = -4.2, z = -14.2) {
   teaTable.position.set(0, 0.82, 0.15);
   teaTable.castShadow = true;
   g.add(teaTable);
-  const teapot = new T.Mesh(new T.SphereGeometry(0.1, 10, 8), materials.ceramicMat);
+  const teapot = new T.Mesh(new T.SphereGeometry(0.1, 14, 10), materials.ceramicMat);
   teapot.scale.set(1, 0.78, 1);
   teapot.position.set(-0.18, 0.92, 0.15);
   g.add(teapot);
+  const teapotLid = new T.Mesh(new T.SphereGeometry(0.032, 10, 8), materials.brassMat);
+  teapotLid.position.set(-0.18, 1.0, 0.15);
+  g.add(teapotLid);
+  for (const [cx, cz] of [[0.14, 0.12], [0.24, 0.24]]) {
+    const cup = new T.Mesh(new T.CylinderGeometry(0.042, 0.03, 0.055, 12), materials.ceramicMat);
+    cup.position.set(cx, 0.88, cz);
+    g.add(cup);
+  }
 
   // 6. 4 Hanging warm shoji lanterns beneath eaves + warm interior PointLight
   const pavilionLights = [];

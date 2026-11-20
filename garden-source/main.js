@@ -5,7 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ORIGINAL_DISCOVERIES, MEMORY_TRAIL } from './memories.js';
 import { PALETTE, windUniforms, createRng, createMaterialLibrary } from './src/art/materials.js';
-import { getTerrainHeight, pondDistance, buildTerrainAndFoliage } from './src/art/terrain.js';
+import { getTerrainHeight, pondDistance, pathX, buildTerrainAndFoliage } from './src/art/terrain.js';
 import { buildSakuraTrees } from './src/art/trees.js';
 import { buildGardenPavilion, placeGardenLanterns } from './src/art/architecture.js';
 import { buildReflectivePond } from './src/art/pond.js';
@@ -53,8 +53,8 @@ renderer.info.autoReset = false;
 $('world').append(renderer.domElement);
 
 const scene = new T.Scene();
-scene.background = new T.Color('#475773');
-scene.fog = new T.FogExp2('#696682', 0.0145);
+scene.background = new T.Color('#42355e');
+scene.fog = new T.FogExp2('#635482', 0.0145);
 
 const camera = new T.PerspectiveCamera(mobile ? 58 : 48, innerWidth / innerHeight, 0.1, 220);
 
@@ -120,8 +120,8 @@ const starMat = new T.PointsMaterial({
 const starField = new T.Points(starGeo, starMat);
 scene.add(starField);
 
-// Balanced twilight lighting: warm golden sunset key + cool blue-violet shadow fill
-const hemi = new T.HemisphereLight('#d6b4c8', '#3c3633', 0.95);
+// Balanced twilight lighting: warm golden sunset key + amethyst-violet twilight shadow fill
+const hemi = new T.HemisphereLight('#d9b5e6', '#3a2f42', 0.96);
 scene.add(hemi);
 
 const sun = new T.DirectionalLight('#f7c68d', 2.15);
@@ -178,10 +178,136 @@ loadExternalGardenModels(scene, landmarkCoords).catch((err) => {
   console.warn('Optional 3D models skipped:', err);
 });
 
-const { player, body, wings, aura } = buildPlayerOrb(scene, lib);
-const { ghost, ghostEyes, baseY: ghostBaseY } = buildShySpirit(scene, lib, 2.2, -12.0);
-const { bloomPetals, coreOrb: shrineCore, shrineLight } = buildBlossomShrine(scene, lib, 0.0, -30.0);
+const { player, body, wings, aura, starRing } = buildPlayerOrb(scene, lib);
+const { ghost, ghostEyes, spiritShadow, baseY: ghostBaseY } = buildShySpirit(scene, lib, 2.2, -12.0);
+const {
+  bloom: shrineBloom,
+  bloomPetals,
+  bloomRings,
+  coreOrb: shrineCore,
+  halo: shrineHalo,
+  pollenMotes,
+  shrineLight
+} = buildBlossomShrine(scene, lib, 0.0, -30.0);
+colliders.push({ x: 0.0, z: -30.0, r: 1.72 });
 if (shrineLight) virtualLights.push(shrineLight);
+
+// Mood-Adaptive Fluttering Butterflies (Golden Hour & Twilight)
+const butterflyRng = createRng(742);
+const butterflies = [];
+const bfWingGeo = new T.PlaneGeometry(0.11, 0.085);
+bfWingGeo.translate(0.055, 0, 0);
+const bfColors = ['#f6b8e0', '#d6b4ff', '#ffe2a8', '#b8e0ff'];
+for (let i = 0; i < 8; i++) {
+  const bGroup = new T.Group();
+  const bx = (butterflyRng() - 0.5) * 14;
+  const bz = 17 - butterflyRng() * 44;
+  const by = getTerrainHeight(bx, bz) + 0.75 + butterflyRng() * 1.1;
+  bGroup.position.set(bx, by, bz);
+  const wMat = new T.MeshBasicMaterial({
+    color: bfColors[i % bfColors.length],
+    side: T.DoubleSide,
+    transparent: true,
+    opacity: 0.88
+  });
+  const wL = new T.Mesh(bfWingGeo, wMat);
+  const wR = new T.Mesh(bfWingGeo, wMat);
+  wL.scale.x = -1;
+  bGroup.add(wL, wR);
+  scene.add(bGroup);
+  butterflies.push({
+    group: bGroup,
+    wL,
+    wR,
+    mat: wMat,
+    cx: bx,
+    cy: by,
+    cz: bz,
+    rad: 0.85 + butterflyRng() * 1.1,
+    speed: 0.55 + butterflyRng() * 0.45,
+    phase: butterflyRng() * 6.28
+  });
+}
+
+// Starry Night Shooting Star Streak
+const shootingStarMat = new T.MeshBasicMaterial({
+  color: '#fff6e0',
+  transparent: true,
+  opacity: 0,
+  depthWrite: false,
+  blending: T.AdditiveBlending,
+  fog: false
+});
+const shootingStar = new T.Mesh(new T.CylinderGeometry(0.015, 0.09, 8.5, 6), shootingStarMat);
+shootingStar.rotation.z = Math.PI * 0.36;
+shootingStar.visible = false;
+scene.add(shootingStar);
+let shootingStarTimer = 3.5;
+let shootingStarLife = 0;
+const shootingStarVel = new T.Vector3();
+
+// Floating Sky Wish Lanterns (persisted in localStorage)
+const LANTERN_KEY = 'hir_garden_lanterns_v1';
+const skyLanterns = [];
+const skyLanternBodyGeo = new T.CylinderGeometry(0.22, 0.14, 0.42, 10, 1, true);
+const skyLanternRimGeo = new T.TorusGeometry(0.14, 0.012, 6, 12);
+
+function spawnSkyLantern(x, y, z, { startHigh = false } = {}) {
+  const g = new T.Group();
+  const bodyMesh = new T.Mesh(skyLanternBodyGeo, lib.materials.skyLanternMat);
+  g.add(bodyMesh);
+  const rim = new T.Mesh(skyLanternRimGeo, lib.materials.woodDarkMat);
+  rim.rotation.x = Math.PI / 2;
+  rim.position.y = -0.21;
+  g.add(rim);
+  const glow = new T.Sprite(
+    new T.SpriteMaterial({
+      map: textures.glowTex,
+      color: '#ffcf8f',
+      transparent: true,
+      opacity: 0.65,
+      depthWrite: false,
+      blending: T.AdditiveBlending
+    })
+  );
+  glow.scale.set(1.35, 1.35, 1.35);
+  g.add(glow);
+  g.position.set(x, startHigh ? 7.5 + Math.random() * 8.5 : y, z);
+  scene.add(g);
+  skyLanterns.push({
+    group: g,
+    baseX: x,
+    baseZ: z,
+    riseSpeed: 0.36 + Math.random() * 0.18,
+    phase: Math.random() * 6.28,
+    ceiling: 18 + Math.random() * 6
+  });
+}
+
+function loadSavedWishLanterns() {
+  try {
+    const raw = localStorage.getItem(LANTERN_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (Array.isArray(saved)) {
+      saved.slice(0, 10).forEach((l) => spawnSkyLantern(l.x, 8, l.z, { startHigh: true }));
+    }
+  } catch {
+    // ignore storage issues
+  }
+}
+
+function saveWishLantern(x, z) {
+  try {
+    const raw = localStorage.getItem(LANTERN_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    list.push({ x: Number(x.toFixed(2)), z: Number(z.toFixed(2)) });
+    localStorage.setItem(LANTERN_KEY, JSON.stringify(list.slice(-10)));
+  } catch {
+    // ignore storage issues
+  }
+}
+loadSavedWishLanterns();
 
 // Dynamic Nearest-Light Pool (keeps NUM_POINT_LIGHTS = 5 in all PBR shaders for faster compile & higher FPS)
 const LIGHT_POOL_SIZE = 5;
@@ -364,7 +490,10 @@ function applyQualityPreset(level) {
   composer.setPixelRatio(renderer.getPixelRatio());
   bloomPass.setSize(innerWidth, innerHeight);
   renderer.shadowMap.needsUpdate = true;
-  $('qualityButton').textContent = `quality: ${level}`;
+  const qLabel = $('qualityButton')?.querySelector('.slot-label');
+  const qText = level.charAt(0).toUpperCase() + level.slice(1);
+  if (qLabel) qLabel.textContent = qText;
+  else if ($('qualityButton')) $('qualityButton').textContent = `quality: ${level}`;
 }
 applyQualityPreset(QUALITY_LEVELS[qualityIndex]);
 
@@ -374,36 +503,36 @@ $('qualityButton').onclick = () => {
 };
 
 // ============================================================================
-// SKY / LIGHTING MOOD PRESETS (Twilight · Golden Hour · Starry Night)
+// SKY / LIGHTING MOOD PRESETS (Amethyst Twilight · Golden Hour · Starry Night)
 // ============================================================================
 const MOOD_PRESETS = [
   {
     key: 'twilight',
-    label: 'sky: twilight',
-    bg: new T.Color('#475773'),
-    fog: new T.Color('#696682'),
+    label: 'Twilight',
+    bg: new T.Color('#42355e'),
+    fog: new T.Color('#635482'),
     fogDensity: 0.0145,
-    skyTint: new T.Color('#ffffff'),
+    skyTint: new T.Color('#f4e2ff'),
     sunColor: new T.Color('#f7c68d'),
     sunInt: 2.15,
-    hemiSky: new T.Color('#d6b4c8'),
-    hemiGround: new T.Color('#3c3633'),
-    hemiInt: 0.95,
+    hemiSky: new T.Color('#d9b5e6'),
+    hemiGround: new T.Color('#3a2f42'),
+    hemiInt: 0.96,
     lightScale: 1.0,
-    starOp: 0.35,
-    moonOp: 0.42
+    starOp: 0.4,
+    moonOp: 0.45
   },
   {
     key: 'golden',
-    label: 'sky: golden hour',
-    bg: new T.Color('#8c686b'),
-    fog: new T.Color('#b88978'),
+    label: 'Golden',
+    bg: new T.Color('#8c6674'),
+    fog: new T.Color('#b58584'),
     fogDensity: 0.0128,
-    skyTint: new T.Color('#ffdec2'),
+    skyTint: new T.Color('#ffdec6'),
     sunColor: new T.Color('#ffbd6e'),
     sunInt: 2.85,
-    hemiSky: new T.Color('#ffe0c2'),
-    hemiGround: new T.Color('#524034'),
+    hemiSky: new T.Color('#ffe0ca'),
+    hemiGround: new T.Color('#523f3c'),
     hemiInt: 1.12,
     lightScale: 0.68,
     starOp: 0.0,
@@ -411,28 +540,32 @@ const MOOD_PRESETS = [
   },
   {
     key: 'night',
-    label: 'sky: starry night',
-    bg: new T.Color('#141d30'),
-    fog: new T.Color('#1d2740'),
+    label: 'Starry',
+    bg: new T.Color('#16122e'),
+    fog: new T.Color('#211a42'),
     fogDensity: 0.016,
-    skyTint: new T.Color('#5a6d96'),
-    sunColor: new T.Color('#82a3d9'),
-    sunInt: 0.92,
-    hemiSky: new T.Color('#6277a6'),
-    hemiGround: new T.Color('#1c202b'),
-    hemiInt: 0.68,
-    lightScale: 1.55,
-    starOp: 0.95,
-    moonOp: 0.72
+    skyTint: new T.Color('#675a99'),
+    sunColor: new T.Color('#979ee6'),
+    sunInt: 0.95,
+    hemiSky: new T.Color('#776eb5'),
+    hemiGround: new T.Color('#1d182e'),
+    hemiInt: 0.72,
+    lightScale: 1.62,
+    starOp: 0.98,
+    moonOp: 0.78
   }
 ];
 let moodIndex = 0;
 let curMoodLightScale = 1.0;
 
-$('moodButton')?.addEventListener('click', () => {
+function cycleMood() {
   moodIndex = (moodIndex + 1) % MOOD_PRESETS.length;
-  $('moodButton').textContent = MOOD_PRESETS[moodIndex].label;
-});
+  const mLabel = $('moodButton')?.querySelector('.slot-label');
+  if (mLabel) mLabel.textContent = MOOD_PRESETS[moodIndex].label;
+  else if ($('moodButton')) $('moodButton').textContent = `sky: ${MOOD_PRESETS[moodIndex].label.toLowerCase()}`;
+  showStatusToast(`Sky mood: ${MOOD_PRESETS[moodIndex].label}`, 2200);
+}
+$('moodButton')?.addEventListener('click', cycleMood);
 
 // ============================================================================
 // STATUS TOAST, PROGRESS, INDEXEDDB PHOTOS & SYNTHESIZED SOUNDSCAPE
@@ -457,6 +590,23 @@ function showStatusToast(text, durationMs = 3600) {
   statusToastTimer = setTimeout(() => {
     el.textContent = '';
   }, durationMs);
+}
+
+let rpgBannerTimer = null;
+function showRpgBanner(sub, title) {
+  const banner = $('rpgBanner');
+  if (!banner) return;
+  $('rpgBannerSub').textContent = sub;
+  $('rpgBannerTitle').textContent = title;
+  banner.hidden = false;
+  requestAnimationFrame(() => banner.classList.add('show'));
+  if (rpgBannerTimer) clearTimeout(rpgBannerTimer);
+  rpgBannerTimer = setTimeout(() => {
+    banner.classList.remove('show');
+    setTimeout(() => {
+      if (!banner.classList.contains('show')) banner.hidden = true;
+    }, 480);
+  }, 3600);
 }
 
 const PROGRESS_KEY = 'hir_garden_progress_v1';
@@ -697,6 +847,57 @@ function playOrganChord(notes, delaySec = 0, durationSec = 2.2) {
   });
 }
 
+function playOrganNote(freq, durationSec = 1.1) {
+  organPulseTimer = Math.max(organPulseTimer, 1.4);
+  if (!sound) return;
+  ensureAudio();
+  const o1 = audioCtx.createOscillator();
+  const o2 = audioCtx.createOscillator();
+  const filter = audioCtx.createBiquadFilter();
+  const g = audioCtx.createGain();
+  const t = audioCtx.currentTime;
+  o1.type = 'triangle';
+  o2.type = 'sine';
+  o1.frequency.value = freq;
+  o2.frequency.value = freq * 2;
+  filter.type = 'lowpass';
+  filter.frequency.value = 1250;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.048, t + 0.04);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + durationSec);
+  o1.connect(filter);
+  o2.connect(filter);
+  filter.connect(g);
+  g.connect(audioCtx.destination);
+  o1.start(t);
+  o2.start(t);
+  o1.stop(t + durationSec + 0.06);
+  o2.stop(t + durationSec + 0.06);
+}
+
+const MUSIC_BOX_NOTES = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33, 659.25];
+let musicBoxTimer = 3.2;
+let musicBoxIdx = 0;
+
+function playGentleMusicBoxNote() {
+  if (!sound || !audioCtx || audioCtx.state !== 'running') return;
+  const seq = [0, 3, 5, 4, 2, 5, 6, 3, 1, 4, 7, 5];
+  const freq = MUSIC_BOX_NOTES[seq[musicBoxIdx % seq.length]];
+  musicBoxIdx++;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  const t = audioCtx.currentTime;
+  o.type = 'sine';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.014, t + 0.045);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 2.4);
+  o.connect(g);
+  g.connect(audioCtx.destination);
+  o.start(t);
+  o.stop(t + 2.5);
+}
+
 function playOrganMelody() {
   organPulseTimer = 4.5;
   if (!sound) return;
@@ -743,6 +944,9 @@ function playCandlePuff(relight = false) {
 function updateProgressUI() {
   $('count').textContent = `${foundDiscoveries.size} / ${ORIGINAL_DISCOVERIES.length} discoveries · ${foundMemories.size} / ${publicMemories.length} memories`;
   $('journalCount').textContent = `${foundMemories.size}/${publicMemories.length}`;
+  const pct = Math.round(((foundDiscoveries.size + foundMemories.size) / allInteractiveNodes.length) * 100);
+  const fill = $('trailFill');
+  if (fill) fill.style.width = `${pct}%`;
   renderMapAndJournal();
 }
 
@@ -790,7 +994,9 @@ function renderMapAndJournal() {
 function teleportToNode(nodeIdx, openImmediately = false) {
   const node = allInteractiveNodes[nodeIdx];
   if (!node) return;
-  const tz = node.location.z + 1.45;
+  stopTour();
+  const zOffset = node.id === 'discovery-04' ? 2.65 : 1.45;
+  const tz = node.location.z + zOffset;
   player.position.set(node.location.x, getTerrainHeight(node.location.x, tz), tz);
   yaw = 0;
   closeMessage();
@@ -837,10 +1043,109 @@ $('focusWhiteboard')?.addEventListener('click', () => setSceneFocus('whiteboard'
 $('focusBrokenKey')?.addEventListener('click', () => setSceneFocus('key'));
 $('focusOverview')?.addEventListener('click', () => setSceneFocus('overview'));
 
+// ============================================================================
+// PLAYABLE 1-OCTAVE CHOIR ORGAN MINI-KEYBOARD (Memory 07)
+// ============================================================================
+const ORGAN_KEYS = [
+  { note: 'C4', freq: 261.63, key: 'KeyA', label: 'A', black: false },
+  { note: 'C#4', freq: 277.18, key: 'KeyW', label: 'W', black: true, leftPct: 8.6 },
+  { note: 'D4', freq: 293.66, key: 'KeyS', label: 'S', black: false },
+  { note: 'D#4', freq: 311.13, key: 'KeyE', label: 'E', black: true, leftPct: 21.1 },
+  { note: 'E4', freq: 329.63, key: 'KeyD', label: 'D', black: false },
+  { note: 'F4', freq: 349.23, key: 'KeyF', label: 'F', black: false },
+  { note: 'F#4', freq: 369.99, key: 'KeyT', label: 'T', black: true, leftPct: 45.8 },
+  { note: 'G4', freq: 392.0, key: 'KeyG', label: 'G', black: false },
+  { note: 'G#4', freq: 415.3, key: 'KeyY', label: 'Y', black: true, leftPct: 58.3 },
+  { note: 'A4', freq: 440.0, key: 'KeyH', label: 'H', black: false },
+  { note: 'A#4', freq: 466.16, key: 'KeyU', label: 'U', black: true, leftPct: 70.8 },
+  { note: 'B4', freq: 493.88, key: 'KeyJ', label: 'J', black: false },
+  { note: 'C5', freq: 523.25, key: 'KeyK', label: 'K', black: false }
+];
+const organKeyButtons = new Map();
+
+function triggerOrganKey(spec) {
+  playOrganNote(spec.freq, 1.25);
+  const btn = organKeyButtons.get(spec.key);
+  if (btn) {
+    btn.classList.add('pressed');
+    setTimeout(() => btn.classList.remove('pressed'), 220);
+  }
+}
+
+(function buildOrganKeyboardUI() {
+  const kb = $('organKeyboard');
+  if (!kb) return;
+  ORGAN_KEYS.forEach((spec) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `organ-key ${spec.black ? 'black' : 'white'}`;
+    btn.textContent = spec.label;
+    btn.title = `${spec.note} (${spec.label})`;
+    if (spec.black) btn.style.left = `${spec.leftPct}%`;
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      triggerOrganKey(spec);
+    });
+    kb.appendChild(btn);
+    organKeyButtons.set(spec.key, btn);
+  });
+})();
+
+function releaseWishLanternAtPlayer() {
+  const lx = player.position.x - Math.sin(yaw) * 1.1;
+  const lz = player.position.z - Math.cos(yaw) * 1.1;
+  const ly = getTerrainHeight(lx, lz) + 1.15;
+  spawnSkyLantern(lx, ly, lz);
+  saveWishLantern(lx, lz);
+  triggerDiscoveryBurst(lx, ly, lz);
+  chime([523.25, 659.25, 783.99]);
+  showStatusToast('✦ A wish lantern floats into the twilight sky…', 3400);
+}
+$('lanternButton')?.addEventListener('click', releaseWishLanternAtPlayer);
+
+// Guided Memory Walk (Auto-Tour)
+let tourActive = false;
+let tourStep = 0;
+let tourPauseTimer = 0;
+const tourStops = [
+  ...publicMemories.map((_, idx) => ORIGINAL_DISCOVERIES.length + idx),
+  ORIGINAL_DISCOVERIES.findIndex((d) => d.id === 'discovery-04')
+].filter((i) => i >= 0);
+
+function stopTour() {
+  if (!tourActive) return;
+  tourActive = false;
+  $('tourButton')?.setAttribute('aria-pressed', 'false');
+  const lbl = $('tourButton')?.querySelector('.slot-label');
+  if (lbl) lbl.textContent = 'Tour';
+}
+
+function toggleTour() {
+  if (tourActive) {
+    stopTour();
+    showStatusToast('Guided tour paused', 2200);
+    return;
+  }
+  closeMessage();
+  $('map').hidden = true;
+  $('journal').hidden = true;
+  tourActive = true;
+  tourStep = 0;
+  tourPauseTimer = 0;
+  $('tourButton')?.setAttribute('aria-pressed', 'true');
+  const lbl = $('tourButton')?.querySelector('.slot-label');
+  if (lbl) lbl.textContent = 'Stop';
+  showStatusToast('✦ Guided Memory Walk started — sit back & enjoy', 3400);
+}
+$('tourButton')?.addEventListener('click', toggleTour);
+
 function updateMemoryActionBar(node) {
   const bar = $('memoryActionBar');
   const label = $('memoryActionLabel');
   const btn = $('memoryActionBtn');
+  if ($('organKeyboardWrap')) {
+    $('organKeyboardWrap').hidden = node?.id !== 'memory-07';
+  }
   if (!bar || !label || !btn) return;
   if (node?.id === 'memory-05' && animatedProps.cupcake) {
     bar.hidden = false;
@@ -850,6 +1155,10 @@ function updateMemoryActionBar(node) {
     bar.hidden = false;
     label.textContent = 'Choir organ:';
     btn.textContent = '♪ play organ melody';
+  } else if (node?.id === 'discovery-04') {
+    bar.hidden = false;
+    label.textContent = 'Blossom sanctuary:';
+    btn.textContent = 'release wish lantern ✦';
   } else {
     bar.hidden = true;
   }
@@ -877,6 +1186,8 @@ $('memoryActionBtn')?.addEventListener('click', () => {
   } else if (activeNode?.id === 'memory-07') {
     playOrganMelody();
     showStatusToast('♪ Playing a quiet organ melody…', 4400);
+  } else if (activeNode?.id === 'discovery-04') {
+    releaseWishLanternAtPlayer();
   }
 });
 
@@ -890,6 +1201,7 @@ function checkTrailComplete() {
     opening = 1;
     triggerDiscoveryBurst(0, getTerrainHeight(0, -30) + 0.6, -30);
     chime([392, 493.88, 587.33, 659.25, 783.99, 987.77]);
+    showRpgBanner('TRAIL COMPLETE', 'Every Memory Unlocked ✿');
     showStatusToast('✿ You walked through every memory in the garden.', 6200);
   }
 }
@@ -898,6 +1210,7 @@ function closeMessage() {
   $('message').hidden = true;
   $('message').classList.remove('inspecting-detail');
   if ($('memoryActionBar')) $('memoryActionBar').hidden = true;
+  if ($('organKeyboardWrap')) $('organKeyboardWrap').hidden = true;
   detailCameraView = null;
   activeNode = null;
   keys.clear();
@@ -910,6 +1223,9 @@ function openNodePanel(node, nodeIdx) {
     $('sceneFocusBar').hidden = node.id !== 'memory-09';
   }
   updateMemoryActionBar(node);
+
+  const isFirstTime =
+    node.type === 'discovery' ? !foundDiscoveries.has(node.id) : !foundMemories.has(node.id);
 
   if (node.type === 'discovery') {
     foundDiscoveries.add(node.id);
@@ -924,6 +1240,7 @@ function openNodePanel(node, nodeIdx) {
     if (node.id === 'discovery-01' && lanterns.gate.light) lanterns.gate.light.intensity = 12;
     if (node.id === 'discovery-03') ghostShyTimer = 2.0;
     if (node.id === 'discovery-04') opening = 1;
+    if (isFirstTime) showRpgBanner('GARDEN DISCOVERY', node.name);
   } else {
     foundMemories.add(node.id);
     $('chapter').textContent = `${node.code} · MEMORY TRAIL`;
@@ -937,6 +1254,7 @@ function openNodePanel(node, nodeIdx) {
     $('title').textContent = node.title;
     $('copy').textContent = node.description;
     $('closeMessage').textContent = 'keep walking →';
+    if (isFirstTime) showRpgBanner('MEMORY UNLOCKED', node.title);
 
     const photoSrc = customPhotos.get(node.id) || node.photo;
     if (photoSrc) {
@@ -953,7 +1271,7 @@ function openNodePanel(node, nodeIdx) {
     }
   }
 
-  rings[nodeIdx].material.color.set('#c8e9b9');
+  rings[nodeIdx].material.color.set('#f5d292');
   triggerDiscoveryBurst(node.location.x, getTerrainHeight(node.location.x, node.location.z), node.location.z);
   saveProgress();
   updateProgressUI();
@@ -1036,11 +1354,22 @@ $('begin').onclick = () => {
 
 $('sound').onclick = () => {
   sound = !sound;
-  $('sound').textContent = sound ? '♪ sound on' : '♪ sound off';
+  const lbl = $('sound').querySelector('.slot-label');
+  if (lbl) lbl.textContent = sound ? 'On' : 'Off';
+  else $('sound').textContent = sound ? '♪ sound on' : '♪ sound off';
   $('sound').setAttribute('aria-pressed', String(sound));
   if (sound && started) ensureAudio();
   else audioCtx?.suspend();
 };
+
+$('minimapWrap')?.addEventListener('click', () => $('mapButton').click());
+
+$('questToggle')?.addEventListener('click', () => {
+  const qt = $('questTracker');
+  if (!qt) return;
+  const collapsed = qt.classList.toggle('collapsed');
+  $('questToggle').textContent = collapsed ? '+' : '−';
+});
 
 $('mapButton').onclick = () => {
   const open = $('map').hidden;
@@ -1067,6 +1396,7 @@ $('closeJournal').onclick = () => {
 };
 
 $('home').onclick = $('reset').onclick = () => {
+  stopTour();
   player.position.set(0, getTerrainHeight(0, 21.5), 21.5);
   yaw = 0;
   closeMessage();
@@ -1102,15 +1432,37 @@ let last = performance.now();
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'BUTTON' && [' ', 'Enter'].includes(e.key)) return;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+
+  // Playable 1-Octave Organ Mini-Keyboard takes keyboard priority when Memory 07 is open
+  if (activeNode?.id === 'memory-07' && !$('message').hidden) {
+    if (e.code === 'Escape') {
+      closeMessage();
+      return;
+    }
+    const organSpec = ORGAN_KEYS.find((k) => k.key === e.code);
+    if (organSpec && !e.repeat) {
+      e.preventDefault();
+      triggerOrganKey(organSpec);
+      return;
+    }
+  }
+
+  if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+    stopTour();
+  }
   keys.add(e.code);
   if (e.code === 'KeyE' && !e.repeat) interact();
   if (e.code === 'Escape') {
+    stopTour();
     closeMessage();
     $('map').hidden = true;
     $('journal').hidden = true;
   }
   if (e.code === 'KeyM' && !e.repeat) $('mapButton').click();
   if (e.code === 'KeyJ' && !e.repeat) $('journalButton').click();
+  if (e.code === 'KeyT' && !e.repeat && started) toggleTour();
+  if (e.code === 'KeyL' && !e.repeat && started) releaseWishLanternAtPlayer();
+  if (e.code === 'KeyV' && !e.repeat && started) cycleMood();
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => {
@@ -1234,6 +1586,120 @@ camera.lookAt(look);
 let overrideCameraView = null;
 const dummy = new T.Object3D();
 
+// ============================================================================
+// MMORPG CIRCULAR FANTASY MINI-MAP & QUEST OBJECTIVE TRACKER
+// ============================================================================
+const minimapCanvas = $('minimapCanvas');
+const minimapCtx = minimapCanvas?.getContext('2d');
+let minimapTimer = 0;
+
+function drawMinimap(t, nextRingIdx) {
+  if (!minimapCtx || !minimapCanvas) return;
+  const w = minimapCanvas.width;
+  const h = minimapCanvas.height;
+  const cx = w * 0.5;
+  const cy = h * 0.5;
+  const scale = 2.65; // pixels per world meter
+
+  minimapCtx.clearRect(0, 0, w, h);
+
+  // Twilight amethyst radar backdrop
+  const bg = minimapCtx.createRadialGradient(cx, cy, 4, cx, cy, cx);
+  bg.addColorStop(0, '#312054');
+  bg.addColorStop(0.72, '#1f143a');
+  bg.addColorStop(1, '#130b26');
+  minimapCtx.fillStyle = bg;
+  minimapCtx.fillRect(0, 0, w, h);
+
+  // Subtle compass rings
+  minimapCtx.strokeStyle = 'rgba(214, 178, 255, 0.16)';
+  minimapCtx.lineWidth = 1;
+  for (const r of [22, 42]) {
+    minimapCtx.beginPath();
+    minimapCtx.arc(cx, cy, r, 0, Math.PI * 2);
+    minimapCtx.stroke();
+  }
+
+  const toMapX = (wx) => cx + (wx - player.position.x) * scale;
+  const toMapY = (wz) => cy + (wz - player.position.z) * scale;
+
+  // Firefly pond silhouette
+  minimapCtx.fillStyle = 'rgba(116, 152, 224, 0.42)';
+  minimapCtx.beginPath();
+  minimapCtx.ellipse(toMapX(-10.4), toMapY(-2.2), 5.2 * scale, 6.2 * scale, 0.15, 0, Math.PI * 2);
+  minimapCtx.fill();
+
+  // Curved lantern stone path
+  minimapCtx.strokeStyle = 'rgba(245, 210, 146, 0.36)';
+  minimapCtx.lineWidth = 3;
+  minimapCtx.lineCap = 'round';
+  minimapCtx.beginPath();
+  for (let wz = 22; wz >= -35; wz -= 2) {
+    const mx = toMapX(pathX(wz));
+    const my = toMapY(wz);
+    if (wz === 22) minimapCtx.moveTo(mx, my);
+    else minimapCtx.lineTo(mx, my);
+  }
+  minimapCtx.stroke();
+
+  // Waypoint markers (visited = champagne gold, next target = pulsing sakura pink, unvisited = soft violet)
+  allInteractiveNodes.forEach((node, idx) => {
+    const mx = toMapX(node.location.x);
+    const my = toMapY(node.location.z);
+    if (Math.hypot(mx - cx, my - cy) > cx - 5) return;
+    const visited = node.type === 'discovery' ? foundDiscoveries.has(node.id) : foundMemories.has(node.id);
+    if (idx === nextRingIdx) {
+      const pulseR = 4.8 + Math.sin(t * 4.5) * 1.8;
+      minimapCtx.strokeStyle = 'rgba(243, 180, 208, 0.78)';
+      minimapCtx.lineWidth = 1.4;
+      minimapCtx.beginPath();
+      minimapCtx.arc(mx, my, pulseR, 0, Math.PI * 2);
+      minimapCtx.stroke();
+    }
+    minimapCtx.fillStyle =
+      node.id === 'discovery-04'
+        ? '#f5b6ff'
+        : visited
+          ? '#f5d292'
+          : idx === nextRingIdx
+            ? '#ff9ec9'
+            : '#b28cff';
+    minimapCtx.beginPath();
+    minimapCtx.arc(mx, my, node.id === 'discovery-04' ? 4.2 : visited ? 2.8 : 3.2, 0, Math.PI * 2);
+    minimapCtx.fill();
+  });
+
+  // Player directional chevron at center
+  minimapCtx.save();
+  minimapCtx.translate(cx, cy);
+  minimapCtx.rotate(-yaw);
+  minimapCtx.fillStyle = '#ffe5a8';
+  minimapCtx.beginPath();
+  minimapCtx.moveTo(0, -6.5);
+  minimapCtx.lineTo(4.6, 5.2);
+  minimapCtx.lineTo(0, 2.4);
+  minimapCtx.lineTo(-4.6, 5.2);
+  minimapCtx.closePath();
+  minimapCtx.fill();
+  minimapCtx.restore();
+}
+
+const COMPASS_ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+function updateQuestTracker(targetNode, targetLabel) {
+  const titleEl = $('questTitle');
+  const metaEl = $('questMeta');
+  if (!titleEl || !metaEl || !targetNode) return;
+  titleEl.textContent = targetLabel;
+  const dx = targetNode.location.x - player.position.x;
+  const dz = targetNode.location.z - player.position.z;
+  const dist = Math.round(Math.hypot(dx, dz));
+  // Angle relative to camera forward (-sin(yaw), -cos(yaw))
+  const worldAngle = Math.atan2(dx, -dz);
+  const relAngle = worldAngle + yaw;
+  const oct = ((Math.round(relAngle / (Math.PI / 4)) % 8) + 8) % 8;
+  metaEl.textContent = `${dist}m ${COMPASS_ARROWS[oct]}`;
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.max(0.001, Math.min((now - last) / 1000, 0.05));
@@ -1247,37 +1713,78 @@ function frame(now) {
 
   let movedWhileWalking = false;
   if (started && $('message').hidden && !$('note').open && $('map').hidden && $('journal').hidden) {
-    let inputX = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft')) + stick.x;
-    let inputZ = Number(keys.has('KeyS') || keys.has('ArrowDown')) - Number(keys.has('KeyW') || keys.has('ArrowUp')) + stick.y;
-    const len = Math.max(1, Math.hypot(inputX, inputZ));
-    inputX /= len;
-    inputZ /= len;
+    if (tourActive && tourStops.length > 0) {
+      const stopNodeIdx = tourStops[tourStep % tourStops.length];
+      const stopNode = allInteractiveNodes[stopNodeIdx];
+      const stopZ = stopNode.location.z + (stopNode.id === 'discovery-04' ? 2.8 : 1.7);
+      const dx = stopNode.location.x - player.position.x;
+      const dz = stopZ - player.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 0.38) {
+        const stepSpeed = Math.min(2.65, dist * 1.4);
+        const vx = (dx / dist) * stepSpeed;
+        const vz = (dz / dist) * stepSpeed;
+        player.position.x += vx * dt;
+        player.position.z += vz * dt;
+        player.position.y = getTerrainHeight(player.position.x, player.position.z);
+        player.rotation.y = Math.atan2(vx, vz);
+        const desiredYaw = Math.atan2(-dx, -dz);
+        const diff = Math.atan2(Math.sin(desiredYaw - yaw), Math.cos(desiredYaw - yaw));
+        yaw += diff * Math.min(1, dt * 2.2);
+        movedWhileWalking = true;
+      } else {
+        if (tourPauseTimer <= 0) {
+          tourPauseTimer = 4.2;
+          showStatusToast(
+            `✦ Guided Tour · ${stopNode.type === 'memory' ? `${stopNode.code} ${stopNode.title}` : stopNode.name}`,
+            3800
+          );
+          if (stopNode.id === 'discovery-04') opening = 1;
+        } else {
+          tourPauseTimer -= dt;
+          yaw += dt * 0.22;
+          if (tourPauseTimer <= 0) {
+            tourStep++;
+            if (tourStep >= tourStops.length) {
+              stopTour();
+              showStatusToast('✿ Guided Memory Walk complete', 4200);
+            }
+          }
+        }
+      }
+    } else {
+      let inputX = Number(keys.has('KeyD') || keys.has('ArrowRight')) - Number(keys.has('KeyA') || keys.has('ArrowLeft')) + stick.x;
+      let inputZ = Number(keys.has('KeyS') || keys.has('ArrowDown')) - Number(keys.has('KeyW') || keys.has('ArrowUp')) + stick.y;
+      const len = Math.max(1, Math.hypot(inputX, inputZ));
+      inputX /= len;
+      inputZ /= len;
 
-    const targetVx = (inputX * Math.cos(yaw) + inputZ * Math.sin(yaw)) * 3.8;
-    const targetVz = (-inputX * Math.sin(yaw) + inputZ * Math.cos(yaw)) * 3.8;
-    const accel = 1 - Math.exp(-dt * 10);
-    velocity.x = T.MathUtils.lerp(velocity.x, targetVx, accel);
-    velocity.z = T.MathUtils.lerp(velocity.z, targetVz, accel);
+      const targetVx = (inputX * Math.cos(yaw) + inputZ * Math.sin(yaw)) * 3.8;
+      const targetVz = (-inputX * Math.sin(yaw) + inputZ * Math.cos(yaw)) * 3.8;
+      const accel = 1 - Math.exp(-dt * 10);
+      velocity.x = T.MathUtils.lerp(velocity.x, targetVx, accel);
+      velocity.z = T.MathUtils.lerp(velocity.z, targetVz, accel);
 
-    const nx = T.MathUtils.clamp(player.position.x + velocity.x * dt, -16, 16);
-    const nz = T.MathUtils.clamp(player.position.z + velocity.z * dt, -37.5, 24);
-    const blocked =
-      colliders.some((c) => Math.hypot(nx - c.x, nz - c.z) < c.r + 0.28) ||
-      pondDistance(nx, nz) < 5.35;
+      const nx = T.MathUtils.clamp(player.position.x + velocity.x * dt, -16, 16);
+      const nz = T.MathUtils.clamp(player.position.z + velocity.z * dt, -37.5, 24);
+      const blocked =
+        colliders.some((c) => Math.hypot(nx - c.x, nz - c.z) < c.r + 0.28) ||
+        pondDistance(nx, nz) < 5.35;
 
-    const speed = Math.hypot(velocity.x, velocity.z);
-    if (!blocked) {
-      player.position.x = nx;
-      player.position.z = nz;
-      player.position.y = getTerrainHeight(nx, nz);
-      if (speed > 0.65) movedWhileWalking = true;
-    }
-    if (speed > 0.18) {
-      player.rotation.y = Math.atan2(velocity.x, velocity.z);
+      const speed = Math.hypot(velocity.x, velocity.z);
+      if (!blocked) {
+        player.position.x = nx;
+        player.position.z = nz;
+        player.position.y = getTerrainHeight(nx, nz);
+        if (speed > 0.65) movedWhileWalking = true;
+      }
+      if (speed > 0.18) {
+        player.rotation.y = Math.atan2(velocity.x, velocity.z);
+      }
     }
   }
 
-  // Subtle footsteps & proximity pond ambience
+  // Subtle footsteps, proximity pond shimmer & gentle pentatonic music-box underscore
   if (started && sound && audioCtx && audioCtx.state === 'running') {
     if (movedWhileWalking) {
       stepTimer -= dt;
@@ -1292,6 +1799,13 @@ function frame(now) {
       const pDist = pondDistance(player.position.x, player.position.z);
       const waterProx = T.MathUtils.clamp(1 - (pDist - 5.2) / 5.5, 0, 1);
       waterGain.gain.setTargetAtTime(waterProx * 0.042, audioCtx.currentTime, 0.2);
+    }
+    if ($('message').hidden) {
+      musicBoxTimer -= dt;
+      if (musicBoxTimer <= 0) {
+        playGentleMusicBoxNote();
+        musicBoxTimer = 2.4 + Math.random() * 1.6;
+      }
     }
   }
 
@@ -1335,13 +1849,18 @@ function frame(now) {
   let guideRingIdx = -1;
   let gx = 0;
   let gz = -30;
+  let questTargetNode = null;
+  let questTargetLabel = '04 · The Blossom Grove';
   if (nextMemIdx >= 0) {
     const targetNode = publicMemories[nextMemIdx];
     gx = targetNode.location.x;
     gz = targetNode.location.z;
     guideRingIdx = ORIGINAL_DISCOVERIES.length + nextMemIdx;
+    questTargetNode = targetNode;
+    questTargetLabel = `${String(nextMemIdx + 1).padStart(2, '0')} · ${targetNode.title}`;
   } else {
     guideRingIdx = ORIGINAL_DISCOVERIES.findIndex((d) => d.id === 'discovery-04');
+    questTargetNode = allInteractiveNodes[guideRingIdx];
   }
   const orbBobX = reduced ? 0 : Math.sin(t * 1.4) * 0.34;
   const orbBobY = reduced ? 0 : Math.sin(t * 2.2) * 0.2;
@@ -1358,6 +1877,14 @@ function frame(now) {
       r.scale.setScalar(1);
     }
   });
+
+  // Throttle Circular Mini-Map & Quest Tracker redraws (~20fps)
+  minimapTimer -= dt;
+  if (minimapTimer <= 0) {
+    minimapTimer = 0.05;
+    drawMinimap(t, guideRingIdx);
+    updateQuestTracker(questTargetNode, questTargetLabel);
+  }
 
   // Eye-level, cinematic third-person follow camera (or test bookmark / smooth detail focus)
   if (overrideCameraView) {
@@ -1386,15 +1913,36 @@ function frame(now) {
     camera.lookAt(look);
   }
 
-  // Player winged orb & shy spirit animations
-  body.position.y = 0.55 + (reduced ? 0 : Math.sin(t * 3.0) * 0.055);
+  // Upgraded Player Firefly Spirit (4 gossamer wings + orbiting gold stardust ring)
+  body.position.y = 0.56 + (reduced ? 0 : Math.sin(t * 3.0) * 0.055);
   aura.position.y = body.position.y;
-  wings.forEach((w, i) => (w.rotation.z = reduced ? 0 : Math.sin(t * 16) * (i ? 1 : -1) * 0.3));
+  if (starRing && !reduced) {
+    starRing.rotation.z = t * 1.1;
+    starRing.rotation.y = Math.sin(t * 0.7) * 0.35;
+  }
+  wings.forEach((w, i) => {
+    const isRight = i >= 2;
+    const isLower = i % 2 === 1;
+    const flap = reduced ? 0 : Math.sin(t * 16 + (isLower ? 0.45 : 0)) * (isRight ? 1 : -1) * (isLower ? 0.24 : 0.34);
+    w.rotation.z = flap;
+  });
 
+  // Shy Spirit animation + Companion Follow Mode once discovered!
+  if (foundDiscoveries.has('discovery-03') && started) {
+    const followX = player.position.x + Math.cos(yaw) * 1.25 + Math.sin(yaw) * 1.15;
+    const followZ = player.position.z - Math.sin(yaw) * 1.25 + Math.cos(yaw) * 1.15;
+    ghost.position.x = T.MathUtils.lerp(ghost.position.x, followX, 1 - Math.exp(-dt * 1.9));
+    ghost.position.z = T.MathUtils.lerp(ghost.position.z, followZ, 1 - Math.exp(-dt * 1.9));
+    const gTerrain = getTerrainHeight(ghost.position.x, ghost.position.z);
+    ghost.position.y = gTerrain + 0.8 + (reduced ? 0 : Math.sin(t * 2.1) * 0.11);
+    if (spiritShadow) spiritShadow.position.set(ghost.position.x, gTerrain + 0.02, ghost.position.z);
+    ghost.rotation.y = Math.atan2(player.position.x - ghost.position.x, player.position.z - ghost.position.z);
+  } else {
+    ghost.position.y = ghostBaseY + 0.78 + (reduced ? 0 : Math.sin(t * 2.0) * 0.11);
+    ghost.rotation.y = Math.sin(t * 0.6) * 0.28;
+  }
   const distToGhost = Math.hypot(player.position.x - ghost.position.x, player.position.z - ghost.position.z);
   if (ghostShyTimer > 0) ghostShyTimer = Math.max(0, ghostShyTimer - dt);
-  ghost.position.y = ghostBaseY + 0.78 + (reduced ? 0 : Math.sin(t * 2.0) * 0.11);
-  ghost.rotation.y = Math.sin(t * 0.6) * 0.28;
   ghost.rotation.z = distToGhost < 3.6 || ghostShyTimer > 0 ? -0.16 : 0;
   const blink = Math.sin(t * 1.7) > 0.96 ? 0.14 : 1;
   ghostEyes.forEach((eye) => (eye.scale.y = blink));
@@ -1468,6 +2016,54 @@ function frame(now) {
     }
   }
 
+  // Mood-Adaptive Butterflies, Shooting Stars & Floating Sky Wish Lanterns
+  const bfTargetOp = targetMood.key === 'night' ? 0.0 : targetMood.key === 'golden' ? 0.92 : 0.65;
+  butterflies.forEach((b) => {
+    b.mat.opacity = T.MathUtils.lerp(b.mat.opacity, bfTargetOp, dt * 2.5);
+    b.group.visible = b.mat.opacity > 0.04;
+    if (!b.group.visible || reduced) return;
+    const a = t * b.speed + b.phase;
+    const bx = b.cx + Math.cos(a) * b.rad;
+    const bz = b.cz + Math.sin(a * 1.3) * b.rad * 0.72;
+    const by = b.cy + Math.sin(a * 2.4) * 0.24;
+    b.group.position.set(bx, by, bz);
+    b.group.rotation.y = -a;
+    const flap = Math.sin(t * 14 + b.phase) * 0.85;
+    b.wL.rotation.y = flap;
+    b.wR.rotation.y = -flap;
+  });
+
+  if (targetMood.key === 'night' && !reduced) {
+    if (shootingStarLife > 0) {
+      shootingStarLife -= dt;
+      shootingStar.position.addScaledVector(shootingStarVel, dt);
+      shootingStarMat.opacity = Math.sin(Math.max(0, shootingStarLife / 1.1) * Math.PI) * 0.88;
+      if (shootingStarLife <= 0) shootingStar.visible = false;
+    } else {
+      shootingStarTimer -= dt;
+      if (shootingStarTimer <= 0) {
+        shootingStarTimer = 4.2 + Math.random() * 4.5;
+        shootingStarLife = 1.1;
+        shootingStar.visible = true;
+        shootingStar.position.set(-28 + Math.random() * 24, 38 + Math.random() * 14, -75 - Math.random() * 20);
+        shootingStarVel.set(36, -15, 6);
+      }
+    }
+  } else {
+    shootingStar.visible = false;
+  }
+
+  skyLanterns.forEach((l) => {
+    if (reduced) return;
+    l.group.position.y += l.riseSpeed * dt;
+    l.group.position.x = l.baseX + Math.sin(t * 0.45 + l.phase) * 0.9;
+    l.group.position.z = l.baseZ + Math.cos(t * 0.38 + l.phase) * 0.9;
+    l.group.rotation.y = Math.sin(t * 0.5 + l.phase) * 0.25;
+    if (l.group.position.y > l.ceiling) {
+      l.group.position.y = 8.5 + (l.phase % 2.5);
+    }
+  });
+
   // Fireflies & falling blossom petals
   wisps.forEach((w) => {
     if (!w.o.visible) return;
@@ -1537,11 +2133,40 @@ function frame(now) {
     if (burstTimer === 0) burstMesh.count = 0;
   }
 
-  bloomPetals.forEach((p) => {
-    p.rotation.x = T.MathUtils.lerp(p.rotation.x, opening ? -1.2 : -0.32, dt * 2);
-    p.position.z = T.MathUtils.lerp(p.position.z, opening ? 0.5 : 0.24, dt * 2);
-  });
-  shrineCore.position.y = 0.32 + Math.sin(t * 1.8) * 0.04;
+  // Hero Multi-Layered Blooming Flower progressive unfurling + golden pollen motes
+  const bloomProgress = T.MathUtils.clamp(
+    0.22 + (foundMemories.size / Math.max(1, publicMemories.length)) * 0.56 + (opening ? 0.22 : 0),
+    0.22,
+    1.0
+  );
+  if (bloomRings) {
+    bloomRings.forEach((ring, rIdx) => {
+      const targetTilt = T.MathUtils.lerp(ring.closedTilt, ring.openTilt, bloomProgress);
+      const breathe = reduced ? 0 : Math.sin(t * 1.3 + rIdx * 0.9) * 0.035;
+      ring.petals.forEach((pivot) => {
+        pivot.rotation.x = T.MathUtils.lerp(pivot.rotation.x, targetTilt + breathe, dt * 2.2);
+      });
+    });
+  }
+  if (shrineBloom && !reduced) {
+    shrineBloom.rotation.y += dt * 0.055;
+  }
+  shrineCore.position.y = 0.46 + (reduced ? 0 : Math.sin(t * 1.8) * 0.05);
+  if (shrineHalo) {
+    const haloScale = 2.4 + bloomProgress * 1.2 + (reduced ? 0 : Math.sin(t * 2.1) * 0.22);
+    shrineHalo.scale.setScalar(haloScale);
+  }
+  if (pollenMotes && !reduced) {
+    pollenMotes.forEach((m) => {
+      const a = m.angle + t * m.speed;
+      const r = m.rad * (0.85 + bloomProgress * 0.35);
+      m.mesh.position.set(
+        Math.cos(a) * r,
+        m.baseH + Math.sin(t * 1.4 + m.angle) * 0.16,
+        Math.sin(a) * r
+      );
+    });
+  }
 
   if (usePostFX) composer.render();
   else renderer.render(scene, camera);
@@ -1591,6 +2216,8 @@ window.gardenState = () => {
     firstFrameRendered,
     quality: QUALITY_LEVELS[qualityIndex],
     mood: MOOD_PRESETS[moodIndex].key,
+    tourActive,
+    skyLanternCount: skyLanterns.length,
     cupcakeLit: animatedProps.cupcake?.lit ?? null,
     activeLightCount,
     virtualLightCount: virtualLights.length,
