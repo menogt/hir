@@ -16,6 +16,7 @@ import {
   buildPlayerOrb
 } from './src/art/landmarks.js';
 import { loadExternalGardenModels } from './src/art/externalAssets.js';
+import { getEntryGreeting } from './src/art/dailyGreetings.js';
 import './style.css';
 
 const $ = (id) => document.getElementById(id);
@@ -722,9 +723,53 @@ let trailCompleteTriggered =
   foundDiscoveries.size === ORIGINAL_DISCOVERIES.length &&
   foundMemories.size === publicMemories.length;
 
+// Living Daily Entry Greeting (visit-aware + time-of-day sky match + daily whispers)
+const VISITS_KEY = 'hir_garden_visits_v1';
+let visitCount = 0;
+try {
+  visitCount = Math.max(0, parseInt(localStorage.getItem(VISITS_KEY) || '0', 10) || 0);
+} catch {
+  visitCount = 0;
+}
+
+const entryGreeting = getEntryGreeting({
+  visitCount,
+  memoriesFound: foundMemories.size,
+  totalMemories: publicMemories.length,
+  wishLanternCount: skyLanterns.length
+});
+
+if ($('entryEyebrow')) $('entryEyebrow').textContent = entryGreeting.eyebrow;
+if ($('entryHeading')) $('entryHeading').innerHTML = entryGreeting.headingHtml;
+if ($('entryLead')) $('entryLead').textContent = entryGreeting.lead;
+if ($('begin')) $('begin').textContent = entryGreeting.buttonLabel;
+if ($('entryStatusTrail')) $('entryStatusTrail').textContent = entryGreeting.trailPill;
+if ($('entryStatusSky')) $('entryStatusSky').textContent = entryGreeting.skyPill;
+if ($('entryStatusExtra')) $('entryStatusExtra').textContent = entryGreeting.extraPill;
+
+// Sync starting sky mood immediately to match local time-of-day (no jarring transition)
+moodIndex = entryGreeting.moodIndex;
+{
+  const initMood = MOOD_PRESETS[moodIndex];
+  scene.background.copy(initMood.bg);
+  scene.fog.color.copy(initMood.fog);
+  scene.fog.density = initMood.fogDensity;
+  skyMat.color.copy(initMood.skyTint);
+  sun.color.copy(initMood.sunColor);
+  sun.intensity = initMood.sunInt;
+  hemi.color.copy(initMood.hemiSky);
+  hemi.groundColor.copy(initMood.hemiGround);
+  hemi.intensity = initMood.hemiInt;
+  starMat.opacity = initMood.starOp;
+  moonHalo.material.opacity = initMood.moonOp;
+  curMoodLightScale = initMood.lightScale;
+  const mLabel = $('moodButton')?.querySelector('.slot-label');
+  if (mLabel) mLabel.textContent = initMood.label;
+}
+
 allInteractiveNodes.forEach((node, idx) => {
   const visited = node.type === 'discovery' ? foundDiscoveries.has(node.id) : foundMemories.has(node.id);
-  if (visited && rings[idx]) rings[idx].material.color.set('#c8e9b9');
+  if (visited && rings[idx]) rings[idx].material.color.set('#f5d292');
 });
 
 let audioCtx;
@@ -1345,6 +1390,12 @@ $('closeLightbox').onclick = () => $('lightbox').close();
 
 $('begin').onclick = () => {
   started = true;
+  visitCount += 1;
+  try {
+    localStorage.setItem(VISITS_KEY, String(visitCount));
+  } catch {
+    // ignore storage issues
+  }
   document.body.classList.add('playing');
   $('entry').classList.add('leaving');
   setTimeout(() => ($('entry').hidden = true), 950);
@@ -2214,6 +2265,8 @@ window.gardenState = () => {
   return {
     started,
     firstFrameRendered,
+    visitCount,
+    entryGreeting,
     quality: QUALITY_LEVELS[qualityIndex],
     mood: MOOD_PRESETS[moodIndex].key,
     tourActive,

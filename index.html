@@ -7,9 +7,9 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='24' font-size='24'>✿</text></svg>">
   <title>A Little Place for Hirushi — The Memory Garden</title>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="./assets/index-BNfXAe2V.js"></script>
+  <script type="module" crossorigin src="./assets/index-X_EGUcjJ.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/three-vendor-C71vdBji.js">
-  <link rel="stylesheet" crossorigin href="./assets/index-BwNdd_zM.css">
+  <link rel="stylesheet" crossorigin href="./assets/index-CqByO1zx.css">
 </head>
 <body>
   <div id="world" aria-label="Interactive 3D Memory Garden"></div>
@@ -63,10 +63,15 @@
   <!-- Entry Title Screen -->
   <section id="entry">
     <div class="entry-card">
-      <p class="eyebrow">✦ A TINY WALKABLE MEMORY REALM ✦</p>
-      <h1>Hey, <em>Hirushi.</em></h1>
+      <p id="entryEyebrow" class="eyebrow">✦ THE MEMORY GARDEN ✦</p>
+      <h1 id="entryHeading">A Little <em>Place</em></h1>
       <div class="ornate-divider" aria-hidden="true"><span>✿</span></div>
-      <p class="entry-lead">I made you a quiet twilight garden to wander through—holding the original four garden moments, ten landmarks from our university days, and a blooming flower waiting at the end of the path.</p>
+      <p id="entryLead" class="entry-lead">A quiet sanctuary beneath the cherry blossoms—holding warm stone lanterns, ten small moments along the path, and a lotus flower waiting to bloom at the end.</p>
+      <div class="entry-status-pills" aria-label="Garden status">
+        <span id="entryStatusTrail" class="entry-pill">✿ 0 / 10 Memories</span>
+        <span id="entryStatusSky" class="entry-pill">☾ Twilight</span>
+        <span id="entryStatusExtra" class="entry-pill">❀ Lotus Budding</span>
+      </div>
       <div id="entryLoader" class="entry-loader" aria-live="polite">
         <span id="entryLoaderText">Preparing lanterns &amp; blossoms…</span>
         <div class="loader-track"><i id="entryLoaderBar"></i></div>
